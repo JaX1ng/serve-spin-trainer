@@ -61,6 +61,8 @@ button{cursor:pointer}
 .grp{display:flex;flex-direction:column;gap:6px;padding:9px 0;border-top:1px solid var(--line)}
 .grp:first-of-type{border-top:0;padding-top:2px}
 .grp>label,.grp>.cap{font-size:12px;color:var(--mute);display:flex;justify-content:space-between;gap:8px}
+.grp>.cap.sub{margin-top:3px}
+.grp>.cap>span{opacity:.8;text-align:right}
 .seg,.chips{display:flex;flex-wrap:wrap;gap:5px}
 .seg button,.chips button{flex:1 1 auto;border:1px solid var(--line);background:transparent;border-radius:7px;padding:5px 8px;font-size:13px;color:var(--text);white-space:nowrap}
 .seg button.on,.chips button.on{background:var(--slab2);border-color:var(--ball);color:#fff}
@@ -210,11 +212,15 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
     <div id="panelPractice">
       <h2>练习设置 <small>拖动画面转视角，滚轮缩放</small></h2>
       <p class="note" id="pending" hidden>改好了，下一个球开始按新设置发。</p>
-      <div class="grp"><div class="cap">难度</div>
+      <div class="grp"><div class="cap">难度 <span>一键摆好，摆完哪项都能再改</span></div>
         <div class="chips" id="presetChips">
           <button type="button" data-preset="basic">入门</button><button type="button" data-preset="mid">进阶</button><button type="button" data-preset="match">实战</button>
         </div>
         <p class="note" id="presetNote"></p>
+        <div class="cap sub">假动作 <span>触球后拐去别的方向</span></div>
+        <div class="seg" id="fakeSeg"><button type="button" data-fake="none">没有</button><button type="button" data-fake="some">有时</button><button type="button" data-fake="all">每球都有</button></div>
+        <div class="cap sub">球看到哪儿为止 <span>落台后那段不给看</span></div>
+        <div class="seg" id="watchSeg"><button type="button" data-watch="land">落到你这边</button><button type="button" data-watch="net">过网</button><button type="button" data-watch="racket">一离拍</button></div>
       </div>
       <div class="grp"><label for="playerSel">对方是谁</label>
         <select id="playerSel"></select>
@@ -238,18 +244,11 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
           <div class="cap" style="margin-top:4px">球发得</div>
           <div class="chips" id="lenChips"><button type="button" data-len="0">近（短球）</button><button type="button" data-len="1">远（长球）</button></div>
         </div>
-        <div class="grp"><div class="cap">假动作 <span>触球后拐去别的方向</span></div>
-          <div class="seg" id="fakeSeg"><button type="button" data-fake="none">没有</button><button type="button" data-fake="some">有时</button><button type="button" data-fake="all">每球都有</button></div>
-        </div>
         <div class="grp"><div class="cap">判断选项</div>
           <div class="seg" id="choiceSeg"><button type="button" data-ch="2">只分上 / 下</button><button type="button" data-ch="3">再加"不转"</button></div>
         </div>
         <div class="grp"><div class="cap">播放速度</div>
           <div class="seg" id="speedSeg"><button type="button" data-sp="1">原速</button><button type="button" data-sp="0.5">0.5×</button><button type="button" data-sp="0.25">0.25×</button></div>
-        </div>
-        <div class="grp"><div class="cap">球看到哪儿为止</div>
-          <div class="seg" id="watchSeg"><button type="button" data-watch="land">落到你这边</button><button type="button" data-watch="net">过网</button><button type="button" data-watch="racket">一离拍</button></div>
-          <p class="note">落台之后那段弧线不给看：实战里等看清它拱不拱，早该出手了。</p>
         </div>
       </details>
     </div>

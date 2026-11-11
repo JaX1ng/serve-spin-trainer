@@ -61,6 +61,8 @@ button{cursor:pointer}
 .grp{display:flex;flex-direction:column;gap:6px;padding:9px 0;border-top:1px solid var(--line)}
 .grp:first-of-type{border-top:0;padding-top:2px}
 .grp>label,.grp>.cap{font-size:12px;color:var(--mute);display:flex;justify-content:space-between;gap:8px}
+.grp>.cap.sub{margin-top:3px}
+.grp>.cap>span{opacity:.8;text-align:right}
 .seg,.chips{display:flex;flex-wrap:wrap;gap:5px}
 .seg button,.chips button{flex:1 1 auto;border:1px solid var(--line);background:transparent;border-radius:7px;padding:5px 8px;font-size:13px;color:var(--text);white-space:nowrap}
 .seg button.on,.chips button.on{background:var(--slab2);border-color:var(--ball);color:#fff}
@@ -210,11 +212,15 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
     <div id="panelPractice">
       <h2>练习设置 <small>拖动画面转视角，滚轮缩放</small></h2>
       <p class="note" id="pending" hidden>改好了，下一个球开始按新设置发。</p>
-      <div class="grp"><div class="cap">难度</div>
+      <div class="grp"><div class="cap">难度 <span>一键摆好，摆完哪项都能再改</span></div>
         <div class="chips" id="presetChips">
           <button type="button" data-preset="basic">入门</button><button type="button" data-preset="mid">进阶</button><button type="button" data-preset="match">实战</button>
         </div>
         <p class="note" id="presetNote"></p>
+        <div class="cap sub">假动作 <span>触球后拐去别的方向</span></div>
+        <div class="seg" id="fakeSeg"><button type="button" data-fake="none">没有</button><button type="button" data-fake="some">有时</button><button type="button" data-fake="all">每球都有</button></div>
+        <div class="cap sub">球看到哪儿为止 <span>落台后那段不给看</span></div>
+        <div class="seg" id="watchSeg"><button type="button" data-watch="land">落到你这边</button><button type="button" data-watch="net">过网</button><button type="button" data-watch="racket">一离拍</button></div>
       </div>
       <div class="grp"><label for="playerSel">对方是谁</label>
         <select id="playerSel"></select>
@@ -238,18 +244,11 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
           <div class="cap" style="margin-top:4px">球发得</div>
           <div class="chips" id="lenChips"><button type="button" data-len="0">近（短球）</button><button type="button" data-len="1">远（长球）</button></div>
         </div>
-        <div class="grp"><div class="cap">假动作 <span>触球后拐去别的方向</span></div>
-          <div class="seg" id="fakeSeg"><button type="button" data-fake="none">没有</button><button type="button" data-fake="some">有时</button><button type="button" data-fake="all">每球都有</button></div>
-        </div>
         <div class="grp"><div class="cap">判断选项</div>
           <div class="seg" id="choiceSeg"><button type="button" data-ch="2">只分上 / 下</button><button type="button" data-ch="3">再加"不转"</button></div>
         </div>
         <div class="grp"><div class="cap">播放速度</div>
           <div class="seg" id="speedSeg"><button type="button" data-sp="1">原速</button><button type="button" data-sp="0.5">0.5×</button><button type="button" data-sp="0.25">0.25×</button></div>
-        </div>
-        <div class="grp"><div class="cap">球看到哪儿为止</div>
-          <div class="seg" id="watchSeg"><button type="button" data-watch="land">落到你这边</button><button type="button" data-watch="net">过网</button><button type="button" data-watch="racket">一离拍</button></div>
-          <p class="note">落台之后那段弧线不给看：实战里等看清它拱不拱，早该出手了。</p>
         </div>
       </details>
     </div>
@@ -3074,10 +3073,12 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
   var smooth2 = (u) => u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u);
   var pick = (a) => a[Math.floor(Math.random() * a.length)];
   var PRESETS = {
-    basic: { kinds: { side: true, pure: false }, fake: "none", choices: 2, speed: 0.5, watch: "land", player: "std", note: "\u534A\u901F\uFF0C\u6CA1\u6709\u5047\u52A8\u4F5C\uFF0C\u540C\u4E00\u4E2A\u4EBA\u53D1\uFF0C\u53EA\u5206\u4FA7\u4E0A / \u4FA7\u4E0B\u3002\u5148\u628A\u62CD\u578B\u770B\u660E\u767D\u3002" },
-    mid: { kinds: { side: true, pure: true }, fake: "some", choices: 3, speed: 1, watch: "land", player: "random", note: '\u539F\u901F\uFF0C\u6BCF\u7403\u6362\u4E00\u4E2A\u4EBA\u53D1\uFF0C\u6709\u65F6\u89E6\u7403\u540E\u505A\u5047\u52A8\u4F5C\uFF1B\u52A0\u4E0A\u4E0D\u5E26\u4FA7\u65CB\u7684"\u8F6C\u4E0E\u4E0D\u8F6C"\uFF0C\u8981\u5206\u51FA\u4E0D\u8F6C\u3002' },
-    match: { kinds: { side: true, pure: true }, fake: "all", choices: 3, speed: 1, watch: "net", player: "random", note: "\u539F\u901F\uFF0C\u6BCF\u7403\u90FD\u6709\u5047\u52A8\u4F5C\uFF0C\u7403\u4E00\u8FC7\u7F51\u5C31\u770B\u4E0D\u5230\u4E86\uFF1A\u53EA\u80FD\u9760\u62CD\u578B\u548C\u524D\u534A\u6BB5\u7403\u8DEF\u3002" }
+    basic: { kinds: { side: true, pure: false }, fake: "none", choices: 2, speed: 0.5, watch: "land", player: "std" },
+    mid: { kinds: { side: true, pure: true }, fake: "some", choices: 3, speed: 1, watch: "land", player: "random" },
+    match: { kinds: { side: true, pure: true }, fake: "all", choices: 3, speed: 1, watch: "net", player: "random" }
   };
+  var PRESET_KEYS = ["fake", "choices", "speed", "watch", "player"];
+  var presetFit = (set, p) => PRESET_KEYS.filter((k) => set[k] === p[k]).length + (set.kinds.side === p.kinds.side ? 0.5 : 0) + (set.kinds.pure === p.kinds.pure ? 0.5 : 0);
   var STORE = "pp-spin-v3";
   var S = {
     mode: "practice",
@@ -3113,6 +3114,7 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
       if (!S.set.kinds || !S.set.kinds.side && !S.set.kinds.pure) S.set.kinds = { side: true, pure: false };
       if (S.set.player !== "random" && !PLAYERS[S.set.player]) S.set.player = "std";
       if (!["land", "net", "racket"].includes(S.set.watch)) S.set.watch = "land";
+      if (!PRESETS[S.set.preset]) S.set.preset = Object.keys(PRESETS).reduce((a, k) => presetFit(S.set, PRESETS[k]) >= presetFit(S.set, PRESETS[a]) ? k : a, "basic");
     } catch (e) {
     }
   }
@@ -4099,7 +4101,7 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
       }
       if (S.phase === "ready") {
         st.innerHTML = `<div class="row"><button type="button" class="btn primary" data-act="serve">\u53D1\u7403<kbd>\u7A7A\u683C</kbd></button>
-        <p class="hint" style="flex:1">\u76EF\u4F4F\u89E6\u7403\u90A3\u4E00\u4E0B\u7684\u62CD\u578B\uFF1A\u62CD\u9762\u4EF0\u591A\u5C11\uFF0C\u62CD\u5B50\u8D34\u7740\u7403\u662F\u5F80\u4E0A\u8E6D\u8FD8\u662F\u5F80\u4E0B\u8E6D\u3002\u7403\u4E00\u843D\u5230\u4F60\u8FD9\u8FB9\u5C31\u770B\u4E0D\u5230\u4E86\u3002</p></div>`;
+        <p class="hint" style="flex:1">\u76EF\u4F4F\u89E6\u7403\u90A3\u4E00\u4E0B\u7684\u62CD\u578B\uFF1A\u62CD\u9762\u4EF0\u591A\u5C11\uFF0C\u62CD\u5B50\u8D34\u7740\u7403\u662F\u5F80\u4E0A\u8E6D\u8FD8\u662F\u5F80\u4E0B\u8E6D\u3002\u7403\u4E00${{ land: "\u843D\u5230\u4F60\u8FD9\u8FB9", net: "\u8FC7\u7F51", racket: "\u79BB\u62CD" }[S.set.watch]}\u5C31\u770B\u4E0D\u5230\u4E86\u3002</p></div>`;
       } else if (S.phase === "play" || S.phase === "ask") {
         const three = S.set.choices === 3, pure = S.set.kinds.pure, side = S.set.kinds.side;
         const up = pure && side ? ["\u4E0A\u65CB", "\u4FA7\u4E0A\u4E5F\u7B97"] : pure ? ["\u4E0A\u65CB", ""] : ["\u4FA7\u4E0A", ""], dn = pure && side ? ["\u4E0B\u65CB", "\u4FA7\u4E0B\u4E5F\u7B97"] : pure ? ["\u4E0B\u65CB", ""] : ["\u4FA7\u4E0B", ""];
@@ -4207,9 +4209,6 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
       S.dirty = true;
       save();
     };
-    const custom = () => {
-      S.set.preset = "custom";
-    };
     const segBind = (sel, attr, get, setv) => {
       const root = $(sel);
       root.addEventListener("click", (e) => {
@@ -4238,7 +4237,6 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
     const syncers = [
       multiBind("#typeChips", "type", () => S.set.types, (v) => v),
       multiBind("#kindChips", "kind", () => S.set.kinds, (v) => v, () => {
-        custom();
         if (S.set.kinds.pure) S.set.choices = 3;
       }),
       // "转与不转"就得分出不转
@@ -4250,23 +4248,20 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
       }),
       segBind("#fakeSeg", "fake", () => S.set.fake, (v) => {
         S.set.fake = v;
-        custom();
         touch();
       }),
       segBind("#choiceSeg", "ch", () => S.set.choices, (v) => {
         S.set.choices = parseInt(v, 10);
-        custom();
         touch();
       }),
       segBind("#speedSeg", "sp", () => S.set.speed, (v) => {
         S.set.speed = parseFloat(v);
-        custom();
         save();
       }),
       segBind("#watchSeg", "watch", () => S.set.watch, (v) => {
         S.set.watch = v;
-        custom();
         save();
+        if (S.mode === "practice" && S.phase === "ready") renderStage();
       }),
       segBind("#isoSeg", "iso", () => S.iso, (v) => {
         S.iso = v;
@@ -4283,7 +4278,6 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
     $("#playerSel").innerHTML = '<option value="random">\u6BCF\u7403\u968F\u673A\u6362\u4E00\u4E2A\u4EBA</option>' + PLAYER_KEYS.map((k) => `<option value="${k}">${PLAYERS[k].name}</option>`).join("");
     $("#playerSel").addEventListener("change", (e) => {
       S.set.player = e.target.value;
-      custom();
       touch();
       syncUI();
     });
@@ -4306,7 +4300,7 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
     function syncUI() {
       syncers.forEach((f) => f());
       $$("#presetChips button").forEach((b) => b.classList.toggle("on", b.dataset.preset === S.set.preset));
-      $("#presetNote").textContent = PRESETS[S.set.preset] ? PRESETS[S.set.preset].note : "\u81EA\u5B9A\u4E49\uFF1A\u4E0B\u9762\u6BCF\u4E00\u9879\u90FD\u6309\u4F60\u9009\u7684\u6765\u3002";
+      $("#presetNote").textContent = `\u73B0\u5728\uFF1A${S.set.speed === 1 ? "\u539F\u901F" : S.set.speed === 0.5 ? "\u534A\u901F" : "\xBC \u901F"} \xB7 ${S.set.player === "random" ? "\u6BCF\u7403\u6362\u4EBA" : "\u540C\u4E00\u4E2A\u4EBA\u53D1"} \xB7 ${S.set.choices === 3 ? '\u8981\u5206\u51FA"\u4E0D\u8F6C"' : "\u53EA\u5206\u4E0A / \u4E0B"}`;
       $("#playerSel").value = S.set.player;
       $("#playerNote").textContent = S.set.player === "random" ? "\u7AD9\u59FF\u3001\u629B\u7403\u9AD8\u5EA6\u3001\u5F15\u62CD\u5927\u5C0F\u3001\u6536\u62CD\u65B9\u5F0F\u6BCF\u7403\u90FD\u6362\u3002" : PLAYERS[S.set.player].note + "\u3002";
       $$(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.mode === S.mode));

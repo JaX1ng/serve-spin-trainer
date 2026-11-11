@@ -12,10 +12,13 @@ const smooth = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
 const PRESETS = {
-  basic: { kinds: { side: true, pure: false }, fake: 'none', choices: 2, speed: 0.5, watch: 'land', player: 'std', note: '半速，没有假动作，同一个人发，只分侧上 / 侧下。先把拍型看明白。' },
-  mid: { kinds: { side: true, pure: true }, fake: 'some', choices: 3, speed: 1, watch: 'land', player: 'random', note: '原速，每球换一个人发，有时触球后做假动作；加上不带侧旋的"转与不转"，要分出不转。' },
-  match: { kinds: { side: true, pure: true }, fake: 'all', choices: 3, speed: 1, watch: 'net', player: 'random', note: '原速，每球都有假动作，球一过网就看不到了：只能靠拍型和前半段球路。' },
+  basic: { kinds: { side: true, pure: false }, fake: 'none', choices: 2, speed: 0.5, watch: 'land', player: 'std' },
+  mid: { kinds: { side: true, pure: true }, fake: 'some', choices: 3, speed: 1, watch: 'land', player: 'random' },
+  match: { kinds: { side: true, pure: true }, fake: 'all', choices: 3, speed: 1, watch: 'net', player: 'random' },
 };
+// 三档只是把选项一次摆好的起点：摆完之后哪一项都能再改，改了也还算在这一档里
+const PRESET_KEYS = ['fake', 'choices', 'speed', 'watch', 'player'];
+const presetFit = (set, p) => PRESET_KEYS.filter((k) => set[k] === p[k]).length + (set.kinds.side === p.kinds.side ? 0.5 : 0) + (set.kinds.pure === p.kinds.pure ? 0.5 : 0);
 const STORE = 'pp-spin-v3';
 
 const S = {
@@ -35,6 +38,8 @@ function load(extra) {
     if (!S.set.kinds || (!S.set.kinds.side && !S.set.kinds.pure)) S.set.kinds = { side: true, pure: false };
     if (S.set.player !== 'random' && !PLAYERS[S.set.player]) S.set.player = 'std';
     if (!['land', 'net', 'racket'].includes(S.set.watch)) S.set.watch = 'land';
+    // 旧版本改过选项会存成"自定义"：归到最像的那一档（一样像就取更难的）
+    if (!PRESETS[S.set.preset]) S.set.preset = Object.keys(PRESETS).reduce((a, k) => (presetFit(S.set, PRESETS[k]) >= presetFit(S.set, PRESETS[a]) ? k : a), 'basic');
   } catch (e) { /* 没有存储也照常用 */ }
 }
 function save() {
@@ -738,7 +743,7 @@ function start(hot) {
     if (!sv) { st.innerHTML = '<p class="hint">这组设置下没算出能上台的发球，换个设置再试。</p>'; return; }
     if (S.phase === 'ready') {
       st.innerHTML = `<div class="row"><button type="button" class="btn primary" data-act="serve">发球<kbd>空格</kbd></button>
-        <p class="hint" style="flex:1">盯住触球那一下的拍型：拍面仰多少，拍子贴着球是往上蹭还是往下蹭。球一落到你这边就看不到了。</p></div>`;
+        <p class="hint" style="flex:1">盯住触球那一下的拍型：拍面仰多少，拍子贴着球是往上蹭还是往下蹭。球一${{ land: '落到你这边', net: '过网', racket: '离拍' }[S.set.watch]}就看不到了。</p></div>`;
     } else if (S.phase === 'play' || S.phase === 'ask') {
       const three = S.set.choices === 3, pure = S.set.kinds.pure, side = S.set.kinds.side;
       const up = pure && side ? ['上旋', '侧上也算'] : pure ? ['上旋', ''] : ['侧上', ''], dn = pure && side ? ['下旋', '侧下也算'] : pure ? ['下旋', ''] : ['侧下', ''];
@@ -808,7 +813,6 @@ function start(hot) {
   // ================= 设置面板 =================
   // 改设置不会马上换掉眼前这个球，下一次发球才生效
   const touch = () => { S.dirty = true; save(); };
-  const custom = () => { S.set.preset = 'custom'; };
   const segBind = (sel, attr, get, setv) => {
     const root = $(sel);
     root.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; setv(b.dataset[attr]); syncUI(); });
@@ -828,14 +832,14 @@ function start(hot) {
   };
   const syncers = [
     multiBind('#typeChips', 'type', () => S.set.types, (v) => v),
-    multiBind('#kindChips', 'kind', () => S.set.kinds, (v) => v, () => { custom(); if (S.set.kinds.pure) S.set.choices = 3; }), // "转与不转"就得分出不转
+    multiBind('#kindChips', 'kind', () => S.set.kinds, (v) => v, () => { if (S.set.kinds.pure) S.set.choices = 3; }), // "转与不转"就得分出不转
     multiBind('#posChips', 'pos', () => S.set.pos, (v) => parseInt(v, 10)),
     multiBind('#lenChips', 'len', () => S.set.len, (v) => parseInt(v, 10)),
     segBind('#handSeg', 'hand', () => S.set.hand, (v) => { S.set.hand = parseInt(v, 10); touch(); }),
-    segBind('#fakeSeg', 'fake', () => S.set.fake, (v) => { S.set.fake = v; custom(); touch(); }),
-    segBind('#choiceSeg', 'ch', () => S.set.choices, (v) => { S.set.choices = parseInt(v, 10); custom(); touch(); }),
-    segBind('#speedSeg', 'sp', () => S.set.speed, (v) => { S.set.speed = parseFloat(v); custom(); save(); }),
-    segBind('#watchSeg', 'watch', () => S.set.watch, (v) => { S.set.watch = v; custom(); save(); }),
+    segBind('#fakeSeg', 'fake', () => S.set.fake, (v) => { S.set.fake = v; touch(); }),
+    segBind('#choiceSeg', 'ch', () => S.set.choices, (v) => { S.set.choices = parseInt(v, 10); touch(); }),
+    segBind('#speedSeg', 'sp', () => S.set.speed, (v) => { S.set.speed = parseFloat(v); save(); }),
+    segBind('#watchSeg', 'watch', () => S.set.watch, (v) => { S.set.watch = v; save(); if (S.mode === 'practice' && S.phase === 'ready') renderStage(); }),
     segBind('#isoSeg', 'iso', () => S.iso, (v) => { S.iso = v; }),
   ];
   $('#presetChips').addEventListener('click', (e) => {
@@ -845,7 +849,7 @@ function start(hot) {
     touch(); syncUI();
   });
   $('#playerSel').innerHTML = '<option value="random">每球随机换一个人</option>' + PLAYER_KEYS.map((k) => `<option value="${k}">${PLAYERS[k].name}</option>`).join('');
-  $('#playerSel').addEventListener('change', (e) => { S.set.player = e.target.value; custom(); touch(); syncUI(); });
+  $('#playerSel').addEventListener('change', (e) => { S.set.player = e.target.value; touch(); syncUI(); });
   $('#btnLeft').addEventListener('click', () => { $('#left').classList.toggle('open'); $('#right').classList.remove('open'); });
   $('#btnRight').addEventListener('click', () => { $('#right').classList.toggle('open'); $('#left').classList.remove('open'); });
   $('#views').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.spinView = false; S.home = b.dataset.view; setView(b.dataset.view); } });
@@ -853,7 +857,7 @@ function start(hot) {
   function syncUI() {
     syncers.forEach((f) => f());
     $$('#presetChips button').forEach((b) => b.classList.toggle('on', b.dataset.preset === S.set.preset));
-    $('#presetNote').textContent = PRESETS[S.set.preset] ? PRESETS[S.set.preset].note : '自定义：下面每一项都按你选的来。';
+    $('#presetNote').textContent = `现在：${S.set.speed === 1 ? '原速' : S.set.speed === 0.5 ? '半速' : '¼ 速'} · ${S.set.player === 'random' ? '每球换人' : '同一个人发'} · ${S.set.choices === 3 ? '要分出"不转"' : '只分上 / 下'}`;
     $('#playerSel').value = S.set.player;
     $('#playerNote').textContent = S.set.player === 'random' ? '站姿、抛球高度、引拍大小、收拍方式每球都换。' : PLAYERS[S.set.player].note + '。';
     $$('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.mode === S.mode));
