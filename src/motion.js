@@ -86,10 +86,10 @@ const REST = {
   tuck: { rel: 'pel', at: [0.17, 0.12, -0.10] },    // 收到小腹前
   low: { rel: 'sh', at: [-0.06, -0.44, -0.12] },    // 垂在身侧
 };
-// 抛球那只手的肘朝哪：手臂朝左前方略低处伸着（ARM_B）时，肘朝下、略朝外朝后（ARM_E）；手臂伸向别处时，把这个朝向顺着"最省事的转法"带过去。
+// 抛球那只手的肘朝哪：手臂朝前下方偏外伸着（ARM_B）时，肘朝下、朝后、朝外（ARM_E）；手臂伸向别处时，把这个朝向顺着"最省事的转法"带过去。
 // 这样手臂不管怎么挥，肘的朝向都是连着变的，不会在某一帧突然甩到另一边。
-// 唯一定不下来的方向是 ARM_B 的正反面——左臂穿过自己的胸口朝右后方伸，人做不到；托球、抛球、收手用到的方向离它都很远
-const ARM_B = [0.55, -0.25, -0.8], ARM_E = [-0.35, -0.85, -0.4];
+// 唯一定不下来的方向是 ARM_B 的正反面——手臂朝自己背后斜上方、偏持拍手那一侧伸，人做不到；托球、抛球、收手用到的方向离它都有七八十度
+const ARM_B = [0.75, -0.5, -0.43], ARM_E = [-0.4, -0.6, -0.7];
 
 // 各关节在一次发球里大致能转多快（弧度/秒；骨盆平移是 m/s）。用来把拍速分摊到关节上
 const SPEED = { px: 0.5, py: 0.35, pz: 0.5, lean: 1.5, twist: 3, sF: 7, sR: 7, rot: 14, elb: 17, pro: 15, wf: 24, wd: 22 };
@@ -257,8 +257,8 @@ function slerp(a, b, t) {
 function tableLiftSoft(p, r) {
   const below = P.tableY - (p[1] - r);
   if (below <= 0) return 0;
-  const din = Math.min(P.tableW / 2 + r - Math.abs(p[0]), p[2] + P.tableL / 2 + r) + 0.04; // 离台边还有 4 厘米就开始抬
-  return din <= 0 ? 0 : below * smooth(din / 0.07);
+  const din = Math.min(P.tableW / 2 + r - Math.abs(p[0]), p[2] + P.tableL / 2 + r) + 0.11; // 离台边还有十来厘米就开始抬，抬得缓一些
+  return din <= 0 ? 0 : below * smooth(din / 0.15);
 }
 
 /**
@@ -599,11 +599,13 @@ export function buildMotion(o) {
     { const an = dirsToAngles(A, norm(H2W(A.F, A.R, [0.06, -0.95, 0.3])), norm(sub(tg, addmul(A.SR, norm(H2W(A.F, A.R, [0.06, -0.95, 0.3])), DIM.upper))));
       QR[8] = an.sF; QR[9] = an.sR; QR[10] = clamp(an.rot, LIM.rot[0], LIM.rot[1]); QR[11] = clamp(an.elb, 60 * DEG, 125 * DEG); }
     // 肘别架高；拍子、持拍的手和小臂离托球的手、托球那条小臂远一点（两只手是并排的，不是叠在一起的）
-    const fMid = lerp(A.SL, palmLo, 0.7);
+    const fMid = lerp(A.SL, palmLo, 0.7), yUp = palmHi[1] + followUp, upPath = [0.3, 0.6, 1].map((f) => [palmLo[0], palmLo[1] + (yUp - palmLo[1]) * f, palmLo[2]]);
     const readyPen = (q) => {
       const B = fkCore(q, g), hnd = addmul(B.W, B.dd, 0.05);
       let p = 6 * sq(Math.max(0, B.E[1] - B.SR[1] + 0.13));
       for (const pt of [palmLo, fMid]) p += sq(Math.max(0, 0.115 - distSeg(pt, B.E, B.W))) + sq(Math.max(0, 0.125 - len(sub(pt, hnd)))) + sq(discPen(B.Bc, B.Zf, pt, pt, 0.07));
+      // 托球的手是竖直往上送的：这条路上也不能有拍子和持拍的手
+      for (const pt of upPath) p += sq(Math.max(0, 0.1 - distSeg(pt, B.E, B.W))) + sq(Math.max(0, 0.11 - len(sub(pt, hnd)))) + sq(discPen(B.Bc, B.Zf, pt, pt, 0.065));
       return p;
     };
     const rp = repair(reach(QR, g, tg, 5, { idx: ARM4 }), 2, tg, 70, readyPen, { arm: true });
@@ -849,10 +851,7 @@ export function buildMotion(o) {
       const u = smooth((tau - freeDelay) / plan.freeT);
       if (u <= 0) Wf = A0;
       else {
-        // 收手的路：默认从外侧偏低的地方绕过去；plan.via 可以换成别的绕法
-        let via = plan.via ? norm(H2W(F, R, plan.via)) : null;
-        if (!via) { const a = norm(sub(A0, S0)), b = norm(sub(rs, S0)), ob = H2W(F, R, [0.1, -0.5, -0.85]); via = norm([a[0] + b[0] + ob[0], a[1] + b[1] + ob[1], a[2] + b[2] + ob[2]]); }
-        Wf = sph(A0, rs, via, u);
+        Wf = sph(A0, rs, plan.viaW, u); // 收手的路：半路上手臂朝 plan.viaW（默认从外侧偏低的地方绕过去）
       }
       Wf[1] += tableLiftSoft(Wf, 0.055);
       relax = smooth(tau / 0.3);
@@ -922,20 +921,27 @@ export function buildMotion(o) {
     return pen;
   };
   let plan = null, planBest = 1e9;
+  const Aref = coreAt(tRel + 0.12).A;
   search: for (let ri = 0; ri < restOrder.length; ri++) for (let hi = 0; hi < SWIVEL.length; hi++) for (let ci = 0; ci < VIAS.length; ci++) {
     const pln = { rest: REST[restOrder[ri]], restKey: restOrder[ri], sw: SWIVEL[hi][0], swR: SWIVEL[hi][1], via: VIAS[ci] };
     { // 收手要多久：绕的路越远越久，手最快别超过 6 m/s 左右（抛得低、出手快的时候，手还没收完拍子就挥出来了，也没关系）
-      const ro = H2W(AC.F, AC.R, pln.rest.at), rb = pln.rest.rel === 'pel' ? AC.P : AC.SL;
-      const vA = [palmHi[0] - AC.SL[0], palmHi[1] + followUp - AC.SL[1], palmHi[2] - AC.SL[2]], vB = [rb[0] + ro[0] - AC.SL[0], rb[1] + ro[1] - AC.SL[1], rb[2] + ro[2] - AC.SL[2]];
+      // 方向按"球刚离手那会儿"肩膀的位置估（那时上身比触球时直）
+      const ro = H2W(AC.F, AC.R, pln.rest.at), rb = pln.rest.rel === 'pel' ? Aref.P : Aref.SL, SLr = Aref.SL;
+      const vA = [palmHi[0] - SLr[0], palmHi[1] + followUp - SLr[1], palmHi[2] - SLr[2]], vB = [rb[0] + ro[0] - SLr[0], rb[1] + ro[1] - SLr[1], rb[2] + ro[2] - SLr[2]];
       const rA = len(vA), rB = len(vB), dA = norm(vA), dB = norm(vB);
       let via = pln.via ? norm(H2W(AC.F, AC.R, pln.via)) : null;
-      if (!via) { const ob = H2W(AC.F, AC.R, [0.1, -0.5, -0.85]); via = norm([dA[0] + dB[0] + ob[0], dA[1] + dB[1] + ob[1], dA[2] + dB[2] + ob[2]]); }
-      const arc = 0.8 * (Math.acos(clamp(dot(dA, via), -1, 1)) + Math.acos(clamp(dot(via, dB), -1, 1))) * (rA + rB) / 2 + Math.abs(rA - rB);
-      pln.freeT = clamp(Math.max(freeT, 1.5 * arc / 6), 0.2, 0.55); }
-    const pn = planPen(pln) + 2e-5 * ri + 1e-5 * ci + 1e-5 * hi;
+      if (!via) { const ob = H2W(AC.F, AC.R, [0.1, -0.5, -0.85]), v = [dA[0] + dB[0] + ob[0], dA[1] + dB[1] + ob[1], dA[2] + dB[2] + ob[2]]; via = len(v) > 0.35 ? norm(v) : norm(ob); }
+      pln.viaW = via;
+      const turn = Math.acos(clamp(dot(dA, via), -1, 1)) + Math.acos(clamp(dot(via, dB), -1, 1));
+      const arc = 0.8 * turn * (rA + rB) / 2 + Math.abs(rA - rB);
+      pln.freeT = clamp(Math.max(freeT, 1.5 * arc / 6), 0.2, 0.55); pln.arc = arc;
+      // 途经的方向要是和起点或终点的方向差不多正相反，"从哪边绕过去"就定不下来，手会在某一帧突然换边；绕得太远手也得甩得飞快。这些绕法不要
+      if (dot(dA, via) < -0.7 || dot(via, dB) < -0.7 || turn > 3.2) continue; }
+    const pn = planPen(pln) + 2e-5 * ri + 1e-5 * ci + 1e-5 * hi + 2e-5 * pln.arc;
     if (pn < planBest) { planBest = pn; plan = pln; }
     if (pn < 1e-4) break search;
   }
+  if (!plan) plan = { rest: REST[restOrder[0]], restKey: restOrder[0], sw: 0, swR: 0, via: null, viaW: norm(H2W(AC.F, AC.R, [0.1, -0.5, -0.85])), freeT: 0.4, arc: 1 }; // 哪种绕法都被否了：就从外侧偏低处绕
 
   // 抛球手的肘：逐帧按"肘朝哪"摆出来之后，再在时间上抹平一遍。
   // 不然手臂伸的方向和"肘朝哪"快要重合的那一下，肘会在一两帧里甩到另一边去
@@ -1009,6 +1015,8 @@ function validate(m, o) {
   const ts = [];
   const t0 = Math.min(m.tReady, o.tRel) - 0.05, t1 = Math.min(m.tDone, 0.9);
   for (let t = t0; t < -0.42; t += 0.04) ts.push(t);
+  // 抛球那一下手动得快，查密一点
+  if (o.tPalm0 !== undefined) for (let t = o.tPalm0 - 0.02; t < Math.min(o.tRel + 0.3, -0.42); t += 0.012) ts.push(t);
   for (let t = Math.max(t0, -0.42); t < 0.3; t += 0.012) ts.push(t);
   for (let t = 0.3; t <= t1; t += 0.04) ts.push(t);
   ts.push(0);

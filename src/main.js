@@ -635,8 +635,21 @@ function start(hot) {
     }
     return null;
   }
+  // 下一球提前备好：算一个发球要几十到几百毫秒（手机上更久），趁画面停着等你作答、或者慢放放完的时候先算，
+  // 按"下一球"时就不用等。设置在这之后改过的话，备好的这个作废，按新设置现算
+  let spare = null, spareTimer = 0;
+  const setKey = () => { const s = S.set; return JSON.stringify([s.types, s.kinds, s.player, s.hand, s.pos, s.len, s.fake, s.choices]); };
+  function prepareSpare() {
+    clearTimeout(spareTimer);
+    spareTimer = setTimeout(() => {
+      if (S.mode !== 'practice' || S.playing || (spare && spare.key === setKey())) return;
+      const key = setKey(), sv = makeServe();
+      spare = sv ? { key, sv } : null;
+    }, 120);
+  }
   function nextServe() {
-    const sv = makeServe();
+    const sv = spare && spare.key === setKey() ? spare.sv : makeServe();
+    spare = null;
     if (!sv) { S.serve = null; renderStage(); return false; }
     adopt(sv);
     S.dirty = false; S.phase = 'ready'; S.answer = null; S.t = sv.tStart; S.playing = false; S.stopAt = null; S.auto = null; S.iso = 'all'; S.spinView = false;
@@ -664,6 +677,7 @@ function start(hot) {
   function onPlayEnd() {
     if (S.mode === 'practice' && S.phase === 'play') { S.phase = 'ask'; renderStage(); }
     syncTransport();
+    prepareSpare();
   }
   // 慢放整个动作：引拍 → 触球（放得最慢）→ 收拍 / 假动作 → 球飞完全程。中途不停
   function autoRate(sv, t) {

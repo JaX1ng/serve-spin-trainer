@@ -1039,8 +1039,8 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
     low: { rel: "sh", at: [-0.06, -0.44, -0.12] }
     // 垂在身侧
   };
-  var ARM_B = [0.55, -0.25, -0.8];
-  var ARM_E = [-0.35, -0.85, -0.4];
+  var ARM_B = [0.75, -0.5, -0.43];
+  var ARM_E = [-0.4, -0.6, -0.7];
   var SPEED = { px: 0.5, py: 0.35, pz: 0.5, lean: 1.5, twist: 3, sF: 7, sR: 7, rot: 14, elb: 17, pro: 15, wf: 24, wd: 22 };
   var RATE_IDX = [0, 1, 2, 4, 7, 8, 9, 10, 11, 12, 13, 14];
   var HARD = [[4, LIM.lean], [5, LIM.curl], [6, LIM.side], [7, LIM.twist], [10, LIM.rot], [11, LIM.elb], [12, null], [13, LIM.wf], [14, null]];
@@ -1240,8 +1240,8 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
   function tableLiftSoft(p, r) {
     const below = P.tableY - (p[1] - r);
     if (below <= 0) return 0;
-    const din = Math.min(P.tableW / 2 + r - Math.abs(p[0]), p[2] + P.tableL / 2 + r) + 0.04;
-    return din <= 0 ? 0 : below * smooth(din / 0.07);
+    const din = Math.min(P.tableW / 2 + r - Math.abs(p[0]), p[2] + P.tableL / 2 + r) + 0.11;
+    return din <= 0 ? 0 : below * smooth(din / 0.15);
   }
   function buildMotion(o) {
     const mv = MOVES[o.type], pl = o.pl, rng = o.rng;
@@ -1642,11 +1642,12 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
         QR[10] = clamp2(an.rot, LIM.rot[0], LIM.rot[1]);
         QR[11] = clamp2(an.elb, 60 * DEG, 125 * DEG);
       }
-      const fMid = lerp(A.SL, palmLo, 0.7);
+      const fMid = lerp(A.SL, palmLo, 0.7), yUp = palmHi[1] + followUp, upPath = [0.3, 0.6, 1].map((f) => [palmLo[0], palmLo[1] + (yUp - palmLo[1]) * f, palmLo[2]]);
       const readyPen = (q) => {
         const B = fkCore(q, g), hnd = addmul(B.W, B.dd, 0.05);
         let p = 6 * sq(Math.max(0, B.E[1] - B.SR[1] + 0.13));
         for (const pt of [palmLo, fMid]) p += sq(Math.max(0, 0.115 - distSeg(pt, B.E, B.W))) + sq(Math.max(0, 0.125 - len(sub(pt, hnd)))) + sq(discPen(B.Bc, B.Zf, pt, pt, 0.07));
+        for (const pt of upPath) p += sq(Math.max(0, 0.1 - distSeg(pt, B.E, B.W))) + sq(Math.max(0, 0.11 - len(sub(pt, hnd)))) + sq(discPen(B.Bc, B.Zf, pt, pt, 0.065));
         return p;
       };
       const rp = repair(reach(QR, g, tg, 5, { idx: ARM4 }), 2, tg, 70, readyPen, { arm: true });
@@ -1949,12 +1950,7 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
         const u = smooth((tau - freeDelay) / plan2.freeT);
         if (u <= 0) Wf = A0;
         else {
-          let via = plan2.via ? norm(H2W(F, R, plan2.via)) : null;
-          if (!via) {
-            const a = norm(sub(A0, S0)), b = norm(sub(rs, S0)), ob = H2W(F, R, [0.1, -0.5, -0.85]);
-            via = norm([a[0] + b[0] + ob[0], a[1] + b[1] + ob[1], a[2] + b[2] + ob[2]]);
-          }
-          Wf = sph(A0, rs, via, u);
+          Wf = sph(A0, rs, plan2.viaW, u);
         }
         Wf[1] += tableLiftSoft(Wf, 0.055);
         relax = smooth(tau / 0.3);
@@ -2054,27 +2050,33 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
       return pen;
     };
     let plan = null, planBest = 1e9;
+    const Aref = coreAt(tRel + 0.12).A;
     search: for (let ri = 0; ri < restOrder.length; ri++) for (let hi = 0; hi < SWIVEL.length; hi++) for (let ci = 0; ci < VIAS.length; ci++) {
       const pln = { rest: REST[restOrder[ri]], restKey: restOrder[ri], sw: SWIVEL[hi][0], swR: SWIVEL[hi][1], via: VIAS[ci] };
       {
-        const ro = H2W(AC.F, AC.R, pln.rest.at), rb = pln.rest.rel === "pel" ? AC.P : AC.SL;
-        const vA = [palmHi[0] - AC.SL[0], palmHi[1] + followUp - AC.SL[1], palmHi[2] - AC.SL[2]], vB = [rb[0] + ro[0] - AC.SL[0], rb[1] + ro[1] - AC.SL[1], rb[2] + ro[2] - AC.SL[2]];
+        const ro = H2W(AC.F, AC.R, pln.rest.at), rb = pln.rest.rel === "pel" ? Aref.P : Aref.SL, SLr = Aref.SL;
+        const vA = [palmHi[0] - SLr[0], palmHi[1] + followUp - SLr[1], palmHi[2] - SLr[2]], vB = [rb[0] + ro[0] - SLr[0], rb[1] + ro[1] - SLr[1], rb[2] + ro[2] - SLr[2]];
         const rA = len(vA), rB = len(vB), dA = norm(vA), dB = norm(vB);
         let via = pln.via ? norm(H2W(AC.F, AC.R, pln.via)) : null;
         if (!via) {
-          const ob = H2W(AC.F, AC.R, [0.1, -0.5, -0.85]);
-          via = norm([dA[0] + dB[0] + ob[0], dA[1] + dB[1] + ob[1], dA[2] + dB[2] + ob[2]]);
+          const ob = H2W(AC.F, AC.R, [0.1, -0.5, -0.85]), v = [dA[0] + dB[0] + ob[0], dA[1] + dB[1] + ob[1], dA[2] + dB[2] + ob[2]];
+          via = len(v) > 0.35 ? norm(v) : norm(ob);
         }
-        const arc = 0.8 * (Math.acos(clamp2(dot(dA, via), -1, 1)) + Math.acos(clamp2(dot(via, dB), -1, 1))) * (rA + rB) / 2 + Math.abs(rA - rB);
+        pln.viaW = via;
+        const turn = Math.acos(clamp2(dot(dA, via), -1, 1)) + Math.acos(clamp2(dot(via, dB), -1, 1));
+        const arc = 0.8 * turn * (rA + rB) / 2 + Math.abs(rA - rB);
         pln.freeT = clamp2(Math.max(freeT, 1.5 * arc / 6), 0.2, 0.55);
+        pln.arc = arc;
+        if (dot(dA, via) < -0.7 || dot(via, dB) < -0.7 || turn > 3.2) continue;
       }
-      const pn = planPen(pln) + 2e-5 * ri + 1e-5 * ci + 1e-5 * hi;
+      const pn = planPen(pln) + 2e-5 * ri + 1e-5 * ci + 1e-5 * hi + 2e-5 * pln.arc;
       if (pn < planBest) {
         planBest = pn;
         plan = pln;
       }
       if (pn < 1e-4) break search;
     }
+    if (!plan) plan = { rest: REST[restOrder[0]], restKey: restOrder[0], sw: 0, swR: 0, via: null, viaW: norm(H2W(AC.F, AC.R, [0.1, -0.5, -0.85])), freeT: 0.4, arc: 1 };
     {
       eT0 = Math.min(tb0, tRel, o.tPalm0 === void 0 ? tRel : o.tPalm0) - 0.2;
       const N2 = Math.ceil((te0 + De + 0.1 - eT0) / eDt) + 2, dir = new Array(N2), axis = new Array(N2);
@@ -2189,6 +2191,7 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
     const ts = [];
     const t0 = Math.min(m.tReady, o.tRel) - 0.05, t1 = Math.min(m.tDone, 0.9);
     for (let t = t0; t < -0.42; t += 0.04) ts.push(t);
+    if (o.tPalm0 !== void 0) for (let t = o.tPalm0 - 0.02; t < Math.min(o.tRel + 0.3, -0.42); t += 0.012) ts.push(t);
     for (let t = Math.max(t0, -0.42); t < 0.3; t += 0.012) ts.push(t);
     for (let t = 0.3; t <= t1; t += 0.04) ts.push(t);
     ts.push(0);
@@ -3945,8 +3948,22 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
       }
       return null;
     }
+    let spare = null, spareTimer = 0;
+    const setKey = () => {
+      const s = S.set;
+      return JSON.stringify([s.types, s.kinds, s.player, s.hand, s.pos, s.len, s.fake, s.choices]);
+    };
+    function prepareSpare() {
+      clearTimeout(spareTimer);
+      spareTimer = setTimeout(() => {
+        if (S.mode !== "practice" || S.playing || spare && spare.key === setKey()) return;
+        const key = setKey(), sv = makeServe();
+        spare = sv ? { key, sv } : null;
+      }, 120);
+    }
     function nextServe() {
-      const sv = makeServe();
+      const sv = spare && spare.key === setKey() ? spare.sv : makeServe();
+      spare = null;
       if (!sv) {
         S.serve = null;
         renderStage();
@@ -3999,6 +4016,7 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
         renderStage();
       }
       syncTransport();
+      prepareSpare();
     }
     function autoRate(sv, t) {
       if (t < -0.07) return 0.2;
