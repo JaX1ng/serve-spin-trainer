@@ -309,16 +309,24 @@ function start(hot) {
   controls.addEventListener('start', () => { camAnim = null; }); // 用户自己动了镜头：停掉正在进行的镜头移动
   function flyTo(pos, tgt, dur = 0.55) { camAnim = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: tgt, u: 0, dur }; }
   const ballPos = new T3.Vector3(), prevBall = new T3.Vector3();
+  // 接球视角：屏幕窄、或者两边面板挡住了发球的人时，像真的接发球那样把头转向他
+  let recvAx = 0;
+  function recvAim(sv) {
+    if (!sv) return 0;
+    const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
+    const wide = w > 1020, free = (w - (wide ? 296 + 310 : 0)) / 2 - 120; // 没被挡住的半宽，留出一个人的余量
+    const f = h / 2 / Math.tan((camera.fov * DEG) / 2);
+    const xs = (sv.pc[0] + (sv.body ? sv.body.layout.P[0] : sv.pc[0])) / 2;
+    const off = (Math.abs(xs) / 4.5) * f;
+    return off > free ? clamp((Math.sign(xs) * (off - free) * 4.1) / f, -0.9, 0.9) : 0;
+  }
   function setView(name, instant) {
     S.view = name;
     const sv = S.serve;
     const pc = sv ? V(sv.pc) : new T3.Vector3(0.35, 0.92, -1.5);
     const toEye = EYE.clone().sub(pc).normalize();
     let pos, tgt;
-    if (name === 'recv') { // 窄屏装不下整张台子：像真的接发球那样，把头转向发球的人
-      const ax = camera.aspect < 1 && sv ? clamp((pc.x + (sv.body ? sv.body.layout.P[0] : pc.x)) / 2, -0.8, 0.8) : 0;
-      pos = EYE.clone(); tgt = new T3.Vector3(ax, 0.95, -1.2);
-    }
+    if (name === 'recv') { pos = EYE.clone(); recvAx = recvAim(sv); tgt = new T3.Vector3(recvAx, 0.95, -1.2); }
     else if (name === 'close') { // 还是从你这边看过去，只是走近了
       const bx = sv && sv.body ? sv.body.layout.P[0] - pc.x : 0;
       tgt = pc.clone().add(new T3.Vector3(bx * 0.35, 0.2, 0)); pos = tgt.clone().addScaledVector(toEye, 1.95); pos.y += 0.05;
@@ -571,7 +579,7 @@ function start(hot) {
   function backToHome(newServe) {
     const special = S.view === 'ball' || S.view === 'contact';
     const v = special ? S.home : S.view;
-    if (special || (newServe && (v === 'close' || v === 'side' || (v === 'recv' && camera.aspect < 1)))) setView(v);
+    if (special || (newServe && (v === 'close' || v === 'side' || (v === 'recv' && Math.abs(recvAim(S.serve) - recvAx) > 0.03)))) setView(v);
   }
   function playServe() {
     if (S.dirty || !S.serve) { if (!nextServe()) return; } // 设置改过：换一个符合新设置的球再发
