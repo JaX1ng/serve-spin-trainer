@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>侧上还是侧下</title>
-<meta name="description" content="看拍型判断乒乓球发球是侧上还是侧下：旋转由物理引擎算出来，不是预设动画。">
+<meta name="description" content="看拍型判断乒乓球发球的旋转：侧上还是侧下，转还是不转。旋转由物理引擎算出来，不是预设动画。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Saira+Condensed:wght@500;600;700&family=ZCOOL+QingKe+HuangYou&display=swap" rel="stylesheet">
@@ -51,9 +51,11 @@ button{cursor:pointer}
 /* 侧板 */
 .panel{position:absolute;top:66px;bottom:150px;width:272px;background:var(--slab);border:1px solid var(--line);border-radius:var(--r);
   overflow:auto;padding:12px 12px 14px;backdrop-filter:blur(6px);scrollbar-width:thin}
-#left{left:12px}
+#left{left:12px;bottom:auto;max-height:calc(100% - 216px)}
 #right{right:12px;width:286px}
 #right.locked{bottom:auto}
+#right{bottom:auto;max-height:calc(100% - 216px)}
+#readLock .rule{margin:8px 0 0}
 .panel h2{font:400 17px/1.2 var(--f-disp);letter-spacing:.06em;margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline}
 .panel h2 small{font:400 11px var(--f-body);color:var(--mute);letter-spacing:0}
 .grp{display:flex;flex-direction:column;gap:6px;padding:9px 0;border-top:1px solid var(--line)}
@@ -66,6 +68,12 @@ button{cursor:pointer}
 select{width:100%;background:var(--slab2);border:1px solid var(--line);border-radius:7px;padding:6px 8px}
 .link{background:none;border:0;color:var(--mute);text-decoration:underline;padding:0;font-size:12px;align-self:flex-start}
 .note{font-size:12px;color:var(--mute);margin:0}
+details.more{border-top:1px solid var(--line);padding-top:8px;margin-top:2px}
+details.more>summary{cursor:pointer;font-size:13px;color:var(--text);list-style:none;display:flex;align-items:center;gap:6px;padding:2px 0 6px}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"▸";color:var(--ball);font-size:12px;transition:transform .15s}
+details.more[open]>summary::before{transform:rotate(90deg)}
+details.more .grp:first-of-type{border-top:0;padding-top:2px}
 .note b{color:var(--text);font-weight:500}
 
 /* 滑杆（实验台） */
@@ -124,6 +132,7 @@ dl.kv dd.t{font:500 12.5px var(--f-body)}
 .verdict.ok b{color:var(--ok)}.verdict.no b{color:var(--no)}
 .verdict span{color:var(--text);font-size:13px}
 .verdict span i{font-style:normal;color:var(--mute);font-size:12px;margin-left:10px;white-space:nowrap}
+.verdict span i+i{display:block;margin-left:0;white-space:normal}
 .why{margin:0;font-size:13px;line-height:1.6}
 .why em{font-style:normal;font-weight:700;font-family:var(--f-num);font-size:15px}
 #transport{background:var(--slab);border:1px solid var(--line);border-radius:var(--r);padding:7px 10px;display:flex;flex-direction:column;gap:6px;backdrop-filter:blur(6px)}
@@ -147,6 +156,7 @@ ol.steps li{counter-increment:st;position:relative;padding:7px 9px 8px 34px;back
 ol.steps li::before{content:counter(st);position:absolute;left:9px;top:7px;width:18px;height:18px;border-radius:50%;background:var(--ball);color:#1a1206;font:700 12px/18px var(--f-num);text-align:center}
 ol.steps li b{display:block;font-weight:700;font-size:12px;color:var(--mute);letter-spacing:.04em}
 ol.steps em{font-style:normal;font-weight:700}
+ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;margin-top:2px}
 #pending{color:var(--ball);margin:0 0 6px}
 .note.rule{margin:2px 0 8px;padding:8px 10px;border-left:3px solid var(--ball);background:rgba(255,154,46,.09);border-radius:0 7px 7px 0;color:var(--text);font-size:12.5px;line-height:1.6}
 #err{position:absolute;inset:0;display:none;place-items:center;padding:24px;text-align:center;background:var(--ink)}
@@ -200,44 +210,48 @@ ol.steps em{font-style:normal;font-weight:700}
     <div id="panelPractice">
       <h2>练习设置 <small>拖动画面转视角，滚轮缩放</small></h2>
       <p class="note" id="pending" hidden>改好了，下一个球开始按新设置发。</p>
-      <div class="grp"><div class="cap">练习方案</div>
+      <div class="grp"><div class="cap">难度</div>
         <div class="chips" id="presetChips">
           <button type="button" data-preset="basic">入门</button><button type="button" data-preset="mid">进阶</button><button type="button" data-preset="match">实战</button>
         </div>
         <p class="note" id="presetNote"></p>
       </div>
-      <div class="grp"><div class="cap">对方发什么球 <span>可多选</span></div>
+      <div class="grp"><label for="playerSel">对方是谁</label>
+        <select id="playerSel"></select>
+        <p class="note" id="playerNote"></p>
+      </div>
+      <div class="grp"><div class="cap">发什么球 <span>可多选</span></div>
         <div class="chips" id="typeChips">
           <button type="button" data-type="pendulum">顺旋转(钟摆)</button><button type="button" data-type="reverse">逆旋转</button>
           <button type="button" data-type="hook">勾手</button><button type="button" data-type="backhand">反手</button>
         </div>
+        <div class="chips" id="kindChips">
+          <button type="button" data-kind="side">带侧旋：侧上 / 侧下</button><button type="button" data-kind="pure">不带侧旋：转与不转</button>
+        </div>
       </div>
-      <div class="grp"><div class="cap">对方持拍手</div>
-        <div class="seg" id="handSeg"><button type="button" data-hand="1">右手</button><button type="button" data-hand="-1">左手</button></div>
-      </div>
-      <div class="grp"><div class="cap">对方站在画面的 <span>选几个就在几个里随机</span></div>
-        <div class="chips" id="posChips"><button type="button" data-pos="0">左边</button><button type="button" data-pos="1">中间</button><button type="button" data-pos="2">右边</button></div>
-        <div class="cap" style="margin-top:4px">球发得</div>
-        <div class="chips" id="lenChips"><button type="button" data-len="0">近（短球）</button><button type="button" data-len="1">远（长球）</button></div>
-      </div>
-      <div class="grp"><label for="styleSel">对方的拍型习惯</label>
-        <select id="styleSel">
-          <option value="random">每球随机换一种</option><option value="standard">标准中抛</option><option value="wrist">手腕小动作</option>
-          <option value="arm">大臂大动作</option><option value="high">高抛（拍面看着更仰）</option><option value="low">低抛快节奏（拍面看着更立）</option>
-        </select>
-      </div>
-      <div class="grp"><div class="cap">假动作 <span>触球后反着收拍</span></div>
-        <div class="seg" id="fakeSeg"><button type="button" data-fake="none">没有</button><button type="button" data-fake="some">有时</button><button type="button" data-fake="all">每球都有</button></div>
-      </div>
-      <div class="grp"><div class="cap">判断选项</div>
-        <div class="seg" id="choiceSeg"><button type="button" data-ch="2">侧上 / 侧下</button><button type="button" data-ch="3">再加"不转"</button></div>
-      </div>
-      <div class="grp"><div class="cap">播放速度</div>
-        <div class="seg" id="speedSeg"><button type="button" data-sp="1">原速</button><button type="button" data-sp="0.5">0.5×</button><button type="button" data-sp="0.25">0.25×</button></div>
-      </div>
-      <div class="grp"><div class="cap">只给你看</div>
-        <div class="seg" id="watchSeg"><button type="button" data-watch="both">拍和球</button><button type="button" data-watch="racket">只看拍（球一离拍就消失）</button></div>
-      </div>
+      <details class="more" id="more"><summary>更多设置</summary>
+        <div class="grp"><div class="cap">对方持拍手</div>
+          <div class="seg" id="handSeg"><button type="button" data-hand="1">右手</button><button type="button" data-hand="-1">左手</button></div>
+        </div>
+        <div class="grp"><div class="cap">对方站在画面的 <span>选几个就在几个里随机</span></div>
+          <div class="chips" id="posChips"><button type="button" data-pos="0">左边</button><button type="button" data-pos="1">中间</button><button type="button" data-pos="2">右边</button></div>
+          <div class="cap" style="margin-top:4px">球发得</div>
+          <div class="chips" id="lenChips"><button type="button" data-len="0">近（短球）</button><button type="button" data-len="1">远（长球）</button></div>
+        </div>
+        <div class="grp"><div class="cap">假动作 <span>触球后拐去别的方向</span></div>
+          <div class="seg" id="fakeSeg"><button type="button" data-fake="none">没有</button><button type="button" data-fake="some">有时</button><button type="button" data-fake="all">每球都有</button></div>
+        </div>
+        <div class="grp"><div class="cap">判断选项</div>
+          <div class="seg" id="choiceSeg"><button type="button" data-ch="2">只分上 / 下</button><button type="button" data-ch="3">再加"不转"</button></div>
+        </div>
+        <div class="grp"><div class="cap">播放速度</div>
+          <div class="seg" id="speedSeg"><button type="button" data-sp="1">原速</button><button type="button" data-sp="0.5">0.5×</button><button type="button" data-sp="0.25">0.25×</button></div>
+        </div>
+        <div class="grp"><div class="cap">球看到哪儿为止</div>
+          <div class="seg" id="watchSeg"><button type="button" data-watch="land">落到你这边</button><button type="button" data-watch="net">过网</button><button type="button" data-watch="racket">一离拍</button></div>
+          <p class="note">落台之后那段弧线不给看：实战里等看清它拱不拱，早该出手了。</p>
+        </div>
+      </details>
     </div>
 
     <div id="panelLab" hidden>
@@ -253,26 +267,26 @@ ol.steps em{font-style:normal;font-weight:700}
   </aside>
 
   <aside class="panel" id="right" aria-label="这一球的讲解">
-    <h2>触球那一下 <small id="stageName">—</small></h2>
-    <p class="note" id="readLock">先自己判断。答完这一球，这里会讲触球瞬间拍子对球做了什么。</p>
+    <h2>这一球 <small id="stageName">—</small></h2>
+    <div id="readLock"><p class="note">先自己判断。答完这一球，这里会讲触球那一下拍子对球做了什么。</p>
+      <p class="note rule"><b>记住一句：</b>顺着拍面往上蹭是上旋，往下蹭是下旋；蹭得又薄又快才转。拍头朝哪儿不算数。</p></div>
     <div id="readBody" hidden>
       <ol class="steps" id="explain"></ol>
-      <p class="note rule"><b>一句话记住：</b>只看触球那一下，拍子顺着拍面是往上蹭还是往下蹭。往上是侧上，往下是侧下；拍面后仰得越多，"往下蹭"看上去越像往前送。</p>
-      <div class="grp"><div class="cap">三个方向各转多快 <span>点下面看不同时刻</span></div>
-        <div class="chips" id="stageChips">
+      <details class="more" id="spinMore"><summary>三个方向各转多快</summary>
+        <div class="chips" id="stageChips" style="margin-bottom:6px">
           <button type="button" data-stage="hit">触球瞬间</button><button type="button" data-stage="launch">刚离拍</button><button type="button" data-stage="arrive">到你面前</button>
         </div>
-      </div>
-      <div class="bar bx"><div class="nm"><b>X 横轴</b>上旋 / 下旋</div><div class="val" id="valX">—</div><div class="track"><i id="barX"></i></div><div class="desc" id="descX"></div></div>
-      <div class="bar by"><div class="nm"><b>Y 竖轴</b>侧旋</div><div class="val" id="valY">—</div><div class="track"><i id="barY"></i></div><div class="desc" id="descY"></div></div>
-      <div class="bar bz"><div class="nm"><b>Z 前后轴</b>螺旋</div><div class="val" id="valZ">—</div><div class="track"><i id="barZ"></i></div><div class="desc" id="descZ"></div></div>
-      <div class="tot"><span>合起来</span><span><b id="valT">—</b> <small class="tiny">转/秒</small></span></div>
-      <div class="grp"><div class="cap">"看球怎么转"时只转哪个方向</div>
-        <div class="seg" id="isoSeg"><button type="button" data-iso="all">合成</button><button type="button" data-iso="x">只 X</button><button type="button" data-iso="y">只 Y</button><button type="button" data-iso="z">只 Z</button></div>
-        <label class="cap" for="spinRate">转多快 <span>真实转速太快看不清，这里是放慢的</span></label>
-        <input type="range" id="spinRate" min="0" max="100" value="45">
-      </div>
-      <p class="note">判对错按<b>到你面前</b>的上下旋：到你面前不到 5 转/秒算"不转"。</p>
+        <div class="bar bx"><div class="nm"><b>X 横轴</b>上旋 / 下旋</div><div class="val" id="valX">—</div><div class="track"><i id="barX"></i></div><div class="desc" id="descX"></div></div>
+        <div class="bar by"><div class="nm"><b>Y 竖轴</b>侧旋</div><div class="val" id="valY">—</div><div class="track"><i id="barY"></i></div><div class="desc" id="descY"></div></div>
+        <div class="bar bz"><div class="nm"><b>Z 前后轴</b>螺旋</div><div class="val" id="valZ">—</div><div class="track"><i id="barZ"></i></div><div class="desc" id="descZ"></div></div>
+        <div class="tot"><span>合起来</span><span><b id="valT">—</b> <small class="tiny">转/秒</small></span></div>
+        <div class="grp" id="spinCtl" hidden><div class="cap">球在原地慢转：只转哪个方向</div>
+          <div class="seg" id="isoSeg"><button type="button" data-iso="all">合成</button><button type="button" data-iso="x">只 X</button><button type="button" data-iso="y">只 Y</button><button type="button" data-iso="z">只 Z</button></div>
+          <label class="cap" for="spinRate">转多快 <span>真实转速太快看不清，这里是放慢的</span></label>
+          <input type="range" id="spinRate" min="0" max="100" value="45">
+        </div>
+        <p class="note" style="margin-top:6px">判对错按<b>到你面前</b>的上下旋：不到 5 转/秒算"不转"。</p>
+      </details>
     </div>
   </aside>
 

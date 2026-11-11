@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>侧上还是侧下</title>
-<meta name="description" content="看拍型判断乒乓球发球是侧上还是侧下：旋转由物理引擎算出来，不是预设动画。">
+<meta name="description" content="看拍型判断乒乓球发球的旋转：侧上还是侧下，转还是不转。旋转由物理引擎算出来，不是预设动画。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Saira+Condensed:wght@500;600;700&family=ZCOOL+QingKe+HuangYou&display=swap" rel="stylesheet">
@@ -51,9 +51,11 @@ button{cursor:pointer}
 /* 侧板 */
 .panel{position:absolute;top:66px;bottom:150px;width:272px;background:var(--slab);border:1px solid var(--line);border-radius:var(--r);
   overflow:auto;padding:12px 12px 14px;backdrop-filter:blur(6px);scrollbar-width:thin}
-#left{left:12px}
+#left{left:12px;bottom:auto;max-height:calc(100% - 216px)}
 #right{right:12px;width:286px}
 #right.locked{bottom:auto}
+#right{bottom:auto;max-height:calc(100% - 216px)}
+#readLock .rule{margin:8px 0 0}
 .panel h2{font:400 17px/1.2 var(--f-disp);letter-spacing:.06em;margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline}
 .panel h2 small{font:400 11px var(--f-body);color:var(--mute);letter-spacing:0}
 .grp{display:flex;flex-direction:column;gap:6px;padding:9px 0;border-top:1px solid var(--line)}
@@ -66,6 +68,12 @@ button{cursor:pointer}
 select{width:100%;background:var(--slab2);border:1px solid var(--line);border-radius:7px;padding:6px 8px}
 .link{background:none;border:0;color:var(--mute);text-decoration:underline;padding:0;font-size:12px;align-self:flex-start}
 .note{font-size:12px;color:var(--mute);margin:0}
+details.more{border-top:1px solid var(--line);padding-top:8px;margin-top:2px}
+details.more>summary{cursor:pointer;font-size:13px;color:var(--text);list-style:none;display:flex;align-items:center;gap:6px;padding:2px 0 6px}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"▸";color:var(--ball);font-size:12px;transition:transform .15s}
+details.more[open]>summary::before{transform:rotate(90deg)}
+details.more .grp:first-of-type{border-top:0;padding-top:2px}
 .note b{color:var(--text);font-weight:500}
 
 /* 滑杆（实验台） */
@@ -124,6 +132,7 @@ dl.kv dd.t{font:500 12.5px var(--f-body)}
 .verdict.ok b{color:var(--ok)}.verdict.no b{color:var(--no)}
 .verdict span{color:var(--text);font-size:13px}
 .verdict span i{font-style:normal;color:var(--mute);font-size:12px;margin-left:10px;white-space:nowrap}
+.verdict span i+i{display:block;margin-left:0;white-space:normal}
 .why{margin:0;font-size:13px;line-height:1.6}
 .why em{font-style:normal;font-weight:700;font-family:var(--f-num);font-size:15px}
 #transport{background:var(--slab);border:1px solid var(--line);border-radius:var(--r);padding:7px 10px;display:flex;flex-direction:column;gap:6px;backdrop-filter:blur(6px)}
@@ -147,6 +156,7 @@ ol.steps li{counter-increment:st;position:relative;padding:7px 9px 8px 34px;back
 ol.steps li::before{content:counter(st);position:absolute;left:9px;top:7px;width:18px;height:18px;border-radius:50%;background:var(--ball);color:#1a1206;font:700 12px/18px var(--f-num);text-align:center}
 ol.steps li b{display:block;font-weight:700;font-size:12px;color:var(--mute);letter-spacing:.04em}
 ol.steps em{font-style:normal;font-weight:700}
+ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;margin-top:2px}
 #pending{color:var(--ball);margin:0 0 6px}
 .note.rule{margin:2px 0 8px;padding:8px 10px;border-left:3px solid var(--ball);background:rgba(255,154,46,.09);border-radius:0 7px 7px 0;color:var(--text);font-size:12.5px;line-height:1.6}
 #err{position:absolute;inset:0;display:none;place-items:center;padding:24px;text-align:center;background:var(--ink)}
@@ -200,44 +210,48 @@ ol.steps em{font-style:normal;font-weight:700}
     <div id="panelPractice">
       <h2>练习设置 <small>拖动画面转视角，滚轮缩放</small></h2>
       <p class="note" id="pending" hidden>改好了，下一个球开始按新设置发。</p>
-      <div class="grp"><div class="cap">练习方案</div>
+      <div class="grp"><div class="cap">难度</div>
         <div class="chips" id="presetChips">
           <button type="button" data-preset="basic">入门</button><button type="button" data-preset="mid">进阶</button><button type="button" data-preset="match">实战</button>
         </div>
         <p class="note" id="presetNote"></p>
       </div>
-      <div class="grp"><div class="cap">对方发什么球 <span>可多选</span></div>
+      <div class="grp"><label for="playerSel">对方是谁</label>
+        <select id="playerSel"></select>
+        <p class="note" id="playerNote"></p>
+      </div>
+      <div class="grp"><div class="cap">发什么球 <span>可多选</span></div>
         <div class="chips" id="typeChips">
           <button type="button" data-type="pendulum">顺旋转(钟摆)</button><button type="button" data-type="reverse">逆旋转</button>
           <button type="button" data-type="hook">勾手</button><button type="button" data-type="backhand">反手</button>
         </div>
+        <div class="chips" id="kindChips">
+          <button type="button" data-kind="side">带侧旋：侧上 / 侧下</button><button type="button" data-kind="pure">不带侧旋：转与不转</button>
+        </div>
       </div>
-      <div class="grp"><div class="cap">对方持拍手</div>
-        <div class="seg" id="handSeg"><button type="button" data-hand="1">右手</button><button type="button" data-hand="-1">左手</button></div>
-      </div>
-      <div class="grp"><div class="cap">对方站在画面的 <span>选几个就在几个里随机</span></div>
-        <div class="chips" id="posChips"><button type="button" data-pos="0">左边</button><button type="button" data-pos="1">中间</button><button type="button" data-pos="2">右边</button></div>
-        <div class="cap" style="margin-top:4px">球发得</div>
-        <div class="chips" id="lenChips"><button type="button" data-len="0">近（短球）</button><button type="button" data-len="1">远（长球）</button></div>
-      </div>
-      <div class="grp"><label for="styleSel">对方的拍型习惯</label>
-        <select id="styleSel">
-          <option value="random">每球随机换一种</option><option value="standard">标准中抛</option><option value="wrist">手腕小动作</option>
-          <option value="arm">大臂大动作</option><option value="high">高抛（拍面看着更仰）</option><option value="low">低抛快节奏（拍面看着更立）</option>
-        </select>
-      </div>
-      <div class="grp"><div class="cap">假动作 <span>触球后反着收拍</span></div>
-        <div class="seg" id="fakeSeg"><button type="button" data-fake="none">没有</button><button type="button" data-fake="some">有时</button><button type="button" data-fake="all">每球都有</button></div>
-      </div>
-      <div class="grp"><div class="cap">判断选项</div>
-        <div class="seg" id="choiceSeg"><button type="button" data-ch="2">侧上 / 侧下</button><button type="button" data-ch="3">再加"不转"</button></div>
-      </div>
-      <div class="grp"><div class="cap">播放速度</div>
-        <div class="seg" id="speedSeg"><button type="button" data-sp="1">原速</button><button type="button" data-sp="0.5">0.5×</button><button type="button" data-sp="0.25">0.25×</button></div>
-      </div>
-      <div class="grp"><div class="cap">只给你看</div>
-        <div class="seg" id="watchSeg"><button type="button" data-watch="both">拍和球</button><button type="button" data-watch="racket">只看拍（球一离拍就消失）</button></div>
-      </div>
+      <details class="more" id="more"><summary>更多设置</summary>
+        <div class="grp"><div class="cap">对方持拍手</div>
+          <div class="seg" id="handSeg"><button type="button" data-hand="1">右手</button><button type="button" data-hand="-1">左手</button></div>
+        </div>
+        <div class="grp"><div class="cap">对方站在画面的 <span>选几个就在几个里随机</span></div>
+          <div class="chips" id="posChips"><button type="button" data-pos="0">左边</button><button type="button" data-pos="1">中间</button><button type="button" data-pos="2">右边</button></div>
+          <div class="cap" style="margin-top:4px">球发得</div>
+          <div class="chips" id="lenChips"><button type="button" data-len="0">近（短球）</button><button type="button" data-len="1">远（长球）</button></div>
+        </div>
+        <div class="grp"><div class="cap">假动作 <span>触球后拐去别的方向</span></div>
+          <div class="seg" id="fakeSeg"><button type="button" data-fake="none">没有</button><button type="button" data-fake="some">有时</button><button type="button" data-fake="all">每球都有</button></div>
+        </div>
+        <div class="grp"><div class="cap">判断选项</div>
+          <div class="seg" id="choiceSeg"><button type="button" data-ch="2">只分上 / 下</button><button type="button" data-ch="3">再加"不转"</button></div>
+        </div>
+        <div class="grp"><div class="cap">播放速度</div>
+          <div class="seg" id="speedSeg"><button type="button" data-sp="1">原速</button><button type="button" data-sp="0.5">0.5×</button><button type="button" data-sp="0.25">0.25×</button></div>
+        </div>
+        <div class="grp"><div class="cap">球看到哪儿为止</div>
+          <div class="seg" id="watchSeg"><button type="button" data-watch="land">落到你这边</button><button type="button" data-watch="net">过网</button><button type="button" data-watch="racket">一离拍</button></div>
+          <p class="note">落台之后那段弧线不给看：实战里等看清它拱不拱，早该出手了。</p>
+        </div>
+      </details>
     </div>
 
     <div id="panelLab" hidden>
@@ -253,26 +267,26 @@ ol.steps em{font-style:normal;font-weight:700}
   </aside>
 
   <aside class="panel" id="right" aria-label="这一球的讲解">
-    <h2>触球那一下 <small id="stageName">—</small></h2>
-    <p class="note" id="readLock">先自己判断。答完这一球，这里会讲触球瞬间拍子对球做了什么。</p>
+    <h2>这一球 <small id="stageName">—</small></h2>
+    <div id="readLock"><p class="note">先自己判断。答完这一球，这里会讲触球那一下拍子对球做了什么。</p>
+      <p class="note rule"><b>记住一句：</b>顺着拍面往上蹭是上旋，往下蹭是下旋；蹭得又薄又快才转。拍头朝哪儿不算数。</p></div>
     <div id="readBody" hidden>
       <ol class="steps" id="explain"></ol>
-      <p class="note rule"><b>一句话记住：</b>只看触球那一下，拍子顺着拍面是往上蹭还是往下蹭。往上是侧上，往下是侧下；拍面后仰得越多，"往下蹭"看上去越像往前送。</p>
-      <div class="grp"><div class="cap">三个方向各转多快 <span>点下面看不同时刻</span></div>
-        <div class="chips" id="stageChips">
+      <details class="more" id="spinMore"><summary>三个方向各转多快</summary>
+        <div class="chips" id="stageChips" style="margin-bottom:6px">
           <button type="button" data-stage="hit">触球瞬间</button><button type="button" data-stage="launch">刚离拍</button><button type="button" data-stage="arrive">到你面前</button>
         </div>
-      </div>
-      <div class="bar bx"><div class="nm"><b>X 横轴</b>上旋 / 下旋</div><div class="val" id="valX">—</div><div class="track"><i id="barX"></i></div><div class="desc" id="descX"></div></div>
-      <div class="bar by"><div class="nm"><b>Y 竖轴</b>侧旋</div><div class="val" id="valY">—</div><div class="track"><i id="barY"></i></div><div class="desc" id="descY"></div></div>
-      <div class="bar bz"><div class="nm"><b>Z 前后轴</b>螺旋</div><div class="val" id="valZ">—</div><div class="track"><i id="barZ"></i></div><div class="desc" id="descZ"></div></div>
-      <div class="tot"><span>合起来</span><span><b id="valT">—</b> <small class="tiny">转/秒</small></span></div>
-      <div class="grp"><div class="cap">"看球怎么转"时只转哪个方向</div>
-        <div class="seg" id="isoSeg"><button type="button" data-iso="all">合成</button><button type="button" data-iso="x">只 X</button><button type="button" data-iso="y">只 Y</button><button type="button" data-iso="z">只 Z</button></div>
-        <label class="cap" for="spinRate">转多快 <span>真实转速太快看不清，这里是放慢的</span></label>
-        <input type="range" id="spinRate" min="0" max="100" value="45">
-      </div>
-      <p class="note">判对错按<b>到你面前</b>的上下旋：到你面前不到 5 转/秒算"不转"。</p>
+        <div class="bar bx"><div class="nm"><b>X 横轴</b>上旋 / 下旋</div><div class="val" id="valX">—</div><div class="track"><i id="barX"></i></div><div class="desc" id="descX"></div></div>
+        <div class="bar by"><div class="nm"><b>Y 竖轴</b>侧旋</div><div class="val" id="valY">—</div><div class="track"><i id="barY"></i></div><div class="desc" id="descY"></div></div>
+        <div class="bar bz"><div class="nm"><b>Z 前后轴</b>螺旋</div><div class="val" id="valZ">—</div><div class="track"><i id="barZ"></i></div><div class="desc" id="descZ"></div></div>
+        <div class="tot"><span>合起来</span><span><b id="valT">—</b> <small class="tiny">转/秒</small></span></div>
+        <div class="grp" id="spinCtl" hidden><div class="cap">球在原地慢转：只转哪个方向</div>
+          <div class="seg" id="isoSeg"><button type="button" data-iso="all">合成</button><button type="button" data-iso="x">只 X</button><button type="button" data-iso="y">只 Y</button><button type="button" data-iso="z">只 Z</button></div>
+          <label class="cap" for="spinRate">转多快 <span>真实转速太快看不清，这里是放慢的</span></label>
+          <input type="range" id="spinRate" min="0" max="100" value="45">
+        </div>
+        <p class="note" style="margin-top:6px">判对错按<b>到你面前</b>的上下旋：不到 5 转/秒算"不转"。</p>
+      </details>
     </div>
   </aside>
 
@@ -628,341 +642,1552 @@ ol.steps em{font-style:normal;font-weight:700}
   }
   var smooth = (u) => u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u);
 
-  // src/body.js
-  var BODY = {
-    upper: 0.29,
-    fore: 0.265,
-    // 上臂、前臂
-    thigh: 0.42,
-    shin: 0.43,
-    // 大腿、小腿
-    shHalf: 0.19,
-    hipHalf: 0.095,
-    // 半肩宽、半髋宽
-    spine: 0.46,
-    pelvisY: 0.84,
-    ankleY: 0.075,
-    grip: 0.165,
-    // 拍面中心到手腕的距离（沿拍柄）
-    rTorso: 0.14,
-    rHead: 0.115
-  };
+  // src/skeleton.js
   var DEG = Math.PI / 180;
+  var DIM = {
+    hipHalf: 0.1,
+    hipDrop: 0.03,
+    thigh: 0.43,
+    shin: 0.42,
+    ankle: 0.085,
+    foot: 0.25,
+    lumbar: 0.24,
+    thorax: 0.27,
+    shHalf: 0.185,
+    shDrop: 0.03,
+    neck: 0.085,
+    headR: 0.105,
+    upper: 0.285,
+    fore: 0.255,
+    rLo: 0.125,
+    rHi: 0.135,
+    rUpper: 0.046,
+    rFore: 0.037,
+    rThigh: 0.075,
+    rShin: 0.05,
+    rHand: 0.042,
+    blade: 0.079,
+    // 拍面半径（比实际的 76.5 mm 略大，留一点余量）
+    rubber: 55e-4
+    // 拍面中面到胶皮表面
+  };
+  var NQ = 15;
+  var d2r = (a) => [a[0] * DEG, a[1] * DEG];
+  var LIM = {
+    lean: d2r([6, 74]),
+    curl: d2r([-4, 30]),
+    side: d2r([-18, 18]),
+    twist: d2r([-50, 50]),
+    elev: d2r([0, 142]),
+    rot: d2r([-82, 92]),
+    elb: d2r([8, 146]),
+    pro: d2r([-88, 88]),
+    wf: d2r([-68, 78])
+  };
+  var GRIPS = {
+    shake: { key: "shake", gamma: 36 * DEG, G: [0.0856, 0.024, 0.0328], wd: d2r([-38, 24]), wk: 1, pro: d2r([-88, 88]), pk: 1 },
+    serve: { key: "serve", gamma: 22 * DEG, G: [0.086, 0.023, 0.034], wd: d2r([-104, 40]), wk: 0.38, pro: d2r([-114, 100]), pk: 0.77 }
+  };
+  var NECK = 0.085;
+  var clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+  function fkCore(q, g, Zt) {
+    const sy = Math.sin(q[3]), cy = Math.cos(q[3]);
+    const F = [sy, 0, cy], R = [-cy, 0, sy];
+    const st = Math.sin(q[4]), ct = Math.cos(q[4]), sc = Math.sin(q[5]), cc = Math.cos(q[5]);
+    const ss = Math.sin(q[6]), cs = Math.cos(q[6]), sw = Math.sin(q[7]), cw = Math.cos(q[7]);
+    const u1x = ss * R[0], u1y = cs, u1z = ss * R[2];
+    const sd1 = [ct * u1x + st * F[0], ct * u1y, ct * u1z + st * F[2]];
+    const f1 = [-st * u1x + ct * F[0], -st * u1y, -st * u1z + ct * F[2]];
+    const r1 = cross(f1, sd1);
+    const P2 = [q[0], q[1], q[2]];
+    const M = addmul(P2, sd1, DIM.lumbar);
+    const Uc = [cc * sd1[0] + sc * f1[0], cc * sd1[1] + sc * f1[1], cc * sd1[2] + sc * f1[2]];
+    const Fc0 = [-sc * sd1[0] + cc * f1[0], -sc * sd1[1] + cc * f1[1], -sc * sd1[2] + cc * f1[2]];
+    const Fc = [cw * Fc0[0] - sw * r1[0], cw * Fc0[1] - sw * r1[1], cw * Fc0[2] - sw * r1[2]];
+    const Rc = [cw * r1[0] + sw * Fc0[0], cw * r1[1] + sw * Fc0[1], cw * r1[2] + sw * Fc0[2]];
+    const C = addmul(M, Uc, DIM.thorax);
+    const sF = q[8], sR = q[9];
+    const e = Math.hypot(sF, sR);
+    const ca = e > 1e-7 ? sF / e : 1, sa = e > 1e-7 ? sR / e : 0;
+    const se = Math.sin(e), ce = Math.cos(e);
+    const ua = [0, 0, 0], xu0 = [0, 0, 0];
+    const k1 = -sa * (1 - ce);
+    for (let i = 0; i < 3; i++) {
+      ua[i] = -ce * Uc[i] + se * (ca * Fc[i] + sa * Rc[i]);
+      xu0[i] = ce * Fc[i] + se * ca * Uc[i] + (ca * Rc[i] - sa * Fc[i]) * k1;
+    }
+    const shUp = 0.045 * Math.max(0, -ce), shFw = 0.035 * se * ca;
+    const SR = [0, 0, 0], SL = [0, 0, 0];
+    for (let i = 0; i < 3; i++) {
+      SR[i] = C[i] - DIM.shDrop * Uc[i] + DIM.shHalf * Rc[i] + shUp * Uc[i] + shFw * Fc[i];
+      SL[i] = C[i] - DIM.shDrop * Uc[i] - DIM.shHalf * Rc[i];
+    }
+    const yu0 = cross(ua, xu0);
+    const sr = Math.sin(q[10]), cr = Math.cos(q[10]);
+    const xu = [cr * xu0[0] - sr * yu0[0], cr * xu0[1] - sr * yu0[1], cr * xu0[2] - sr * yu0[2]];
+    const sb = Math.sin(q[11]), cb = Math.cos(q[11]);
+    const fa = [cb * ua[0] + sb * xu[0], cb * ua[1] + sb * xu[1], cb * ua[2] + sb * xu[2]];
+    const h = cross(ua, xu);
+    const E = addmul(SR, ua, DIM.upper), W = addmul(E, fa, DIM.fore);
+    const p0 = [-h[0], -h[1], -h[2]];
+    const k = cross(fa, p0);
+    if (Zt) {
+      const zf = clamp(dot(Zt, fa), -1, 1);
+      const wf = -Math.asin(zf), cwf = Math.cos(wf);
+      if (cwf < 0.05) return null;
+      const p1x = (Zt[0] - zf * fa[0]) / cwf, p1y = (Zt[1] - zf * fa[1]) / cwf, p1z = (Zt[2] - zf * fa[2]) / cwf;
+      q[12] = Math.atan2(-(p1x * k[0] + p1y * k[1] + p1z * k[2]), p1x * p0[0] + p1y * p0[1] + p1z * p0[2]);
+      q[13] = wf;
+    }
+    const frame = (pro, wf, wdev2) => {
+      const sp = Math.sin(pro), cp = Math.cos(pro);
+      const p1 = [cp * p0[0] - sp * k[0], cp * p0[1] - sp * k[1], cp * p0[2] - sp * k[2]];
+      const r1h = cross(fa, p1);
+      const sf = Math.sin(wf), cf = Math.cos(wf);
+      const d = [cf * fa[0] + sf * p1[0], cf * fa[1] + sf * p1[1], cf * fa[2] + sf * p1[2]];
+      const pp2 = [cf * p1[0] - sf * fa[0], cf * p1[1] - sf * fa[1], cf * p1[2] - sf * fa[2]];
+      const sd = Math.sin(wdev2), cd = Math.cos(wdev2);
+      return { dd: [cd * d[0] + sd * r1h[0], cd * d[1] + sd * r1h[1], cd * d[2] + sd * r1h[2]], pp: pp2, rr: [cd * r1h[0] - sd * d[0], cd * r1h[1] - sd * d[1], cd * r1h[2] - sd * d[2]] };
+    };
+    const wdev = q[14] * g.wk, piv = q[14] - wdev;
+    const Vf = frame(q[12], q[13], wdev);
+    const Hf = g.pk === 1 ? Vf : frame(q[12] * g.pk, q[13], wdev);
+    const dd = Hf.dd, pp = Hf.pp, rr = Hf.rr;
+    const sg = Math.sin(g.gamma + piv), cg = Math.cos(g.gamma + piv);
+    const l = [cg * Vf.dd[0] + sg * Vf.rr[0], cg * Vf.dd[1] + sg * Vf.rr[1], cg * Vf.dd[2] + sg * Vf.rr[2]];
+    const Zf = Vf.pp;
+    const Xr = cross(l, Zf);
+    const Bc = [0, 0, 0];
+    for (let i = 0; i < 3; i++) Bc[i] = W[i] + g.G[0] * dd[i] + g.G[1] * pp[i] + g.G[2] * rr[i] + NECK * l[i];
+    return { F, R, P: P2, M, C, Uc, Fc, Rc, SR, SL, ua, fa, h, E, W, dd, pp, rr, l, Zf, Xr, Bc, elev: e, sd1 };
+  }
+  function trunkLite(px, py, pz, yaw, lean, curl, side, twist) {
+    const sy = Math.sin(yaw), cy = Math.cos(yaw), F = [sy, 0, cy], R = [-cy, 0, sy];
+    const st = Math.sin(lean), ct = Math.cos(lean), sc = Math.sin(curl), cc = Math.cos(curl), ss = Math.sin(side), cs = Math.cos(side), sw = Math.sin(twist), cw = Math.cos(twist);
+    const u1x = ss * R[0], u1y = cs, u1z = ss * R[2];
+    const sd1 = [ct * u1x + st * F[0], ct * u1y, ct * u1z + st * F[2]], f1 = [-st * u1x + ct * F[0], -st * u1y, -st * u1z + ct * F[2]];
+    const r1 = cross(f1, sd1);
+    const M = [px + sd1[0] * DIM.lumbar, py + sd1[1] * DIM.lumbar, pz + sd1[2] * DIM.lumbar];
+    const Uc = [cc * sd1[0] + sc * f1[0], cc * sd1[1] + sc * f1[1], cc * sd1[2] + sc * f1[2]];
+    const Fc0 = [-sc * sd1[0] + cc * f1[0], -sc * sd1[1] + cc * f1[1], -sc * sd1[2] + cc * f1[2]];
+    const Rc = [cw * r1[0] + sw * Fc0[0], cw * r1[1] + sw * Fc0[1], cw * r1[2] + sw * Fc0[2]];
+    const C = [M[0] + Uc[0] * DIM.thorax, M[1] + Uc[1] * DIM.thorax, M[2] + Uc[2] * DIM.thorax];
+    const SL = [C[0] - DIM.shDrop * Uc[0] - DIM.shHalf * Rc[0], C[1] - DIM.shDrop * Uc[1] - DIM.shHalf * Rc[1], C[2] - DIM.shDrop * Uc[2] - DIM.shHalf * Rc[2]];
+    const k = DIM.neck + DIM.headR * 0.8;
+    const Fc = [cw * Fc0[0] - sw * r1[0], cw * Fc0[1] - sw * r1[1], cw * Fc0[2] - sw * r1[2]];
+    return { P: [px, py, pz], M, C, SL, Uc, Fc, head: [C[0] + Uc[0] * k * 0.92, C[1] + Uc[1] * k * 0.92 + 0.02, C[2] + Uc[2] * k * 0.92] };
+  }
+  function bladePoint(A, off, face) {
+    const s = face * DIM.rubber;
+    return [
+      A.Bc[0] + off[0] * A.Xr[0] + off[1] * A.l[0] + s * A.Zf[0],
+      A.Bc[1] + off[0] * A.Xr[1] + off[1] * A.l[1] + s * A.Zf[1],
+      A.Bc[2] + off[0] * A.Xr[2] + off[1] * A.l[2] + s * A.Zf[2]
+    ];
+  }
+  function shiftState(A, s) {
+    for (const key of ["P", "M", "C", "SR", "SL", "E", "W", "Bc"]) {
+      const v = A[key];
+      v[0] += s[0];
+      v[1] += s[1];
+      v[2] += s[2];
+    }
+  }
+  function dirsToAngles(A, ua, fa) {
+    const { Uc, Fc, Rc } = A;
+    const e = Math.acos(clamp(-dot(ua, Uc), -1, 1));
+    const a = e > 1e-6 ? Math.atan2(dot(ua, Rc), dot(ua, Fc)) : 0;
+    const ca = Math.cos(a), sa = Math.sin(a), se = Math.sin(e), ce = Math.cos(e), k1 = -sa * (1 - ce);
+    const xu0 = [0, 0, 0];
+    for (let i = 0; i < 3; i++) xu0[i] = ce * Fc[i] + se * ca * Uc[i] + (ca * Rc[i] - sa * Fc[i]) * k1;
+    const yu0 = cross(ua, xu0);
+    let xu = sub(fa, [ua[0] * dot(fa, ua), ua[1] * dot(fa, ua), ua[2] * dot(fa, ua)]);
+    if (len(xu) < 1e-6) xu = xu0;
+    else xu = norm(xu);
+    return { sF: e * ca, sR: e * sa, rot: Math.atan2(-dot(xu, yu0), dot(xu, xu0)), elb: Math.acos(clamp(dot(ua, fa), -1, 1)) };
+  }
   function ik2(S2, H, pole, a, b) {
-    let d = sub(H, S2);
-    let L = len(d);
+    let dv = sub(H, S2);
+    let L = len(dv);
     const mx = a + b - 4e-3;
     let S22 = S2;
     if (L > mx) {
-      S22 = addmul(H, d, -mx / L);
-      d = sub(H, S22);
+      S22 = addmul(H, dv, -mx / L);
+      dv = sub(H, S22);
       L = mx;
     }
     const mn = Math.abs(a - b) + 0.01;
     if (L < mn) L = mn;
-    const dn = norm(d);
-    const ca = Math.max(-1, Math.min(1, (a * a + L * L - b * b) / (2 * a * L))), sa = Math.sqrt(1 - ca * ca);
+    const dn = norm(dv);
+    const ca = clamp((a * a + L * L - b * b) / (2 * a * L), -1, 1), sa = Math.sqrt(1 - ca * ca);
     let pp = addmul(pole, dn, -dot(pole, dn));
     if (len(pp) < 1e-4) pp = addmul([0, -1, 0], dn, dn[1]);
     pp = norm(pp);
-    return { S: S22, E: add(addmul(S22, dn, a * ca), mul(pp, a * sa)) };
+    return { S: S22, E: [S22[0] + dn[0] * a * ca + pp[0] * a * sa, S22[1] + dn[1] * a * ca + pp[1] * a * sa, S22[2] + dn[2] * a * ca + pp[2] * a * sa] };
   }
   function closestOnSeg(p, a, b) {
-    const ab = sub(b, a), l2 = dot(ab, ab) || 1e-9;
-    const t = Math.max(0, Math.min(1, dot(sub(p, a), ab) / l2));
-    return addmul(a, ab, t);
+    const abx = b[0] - a[0], aby = b[1] - a[1], abz = b[2] - a[2];
+    const l2 = abx * abx + aby * aby + abz * abz || 1e-9;
+    const t = clamp(((p[0] - a[0]) * abx + (p[1] - a[1]) * aby + (p[2] - a[2]) * abz) / l2, 0, 1);
+    return [a[0] + abx * t, a[1] + aby * t, a[2] + abz * t];
   }
-  var rotY = (v, a) => {
-    const c = Math.cos(a), s = Math.sin(a);
-    return [v[0] * c + v[2] * s, v[1], -v[0] * s + v[2] * c];
+  var distSeg = (p, a, b) => {
+    const c = closestOnSeg(p, a, b);
+    return Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]);
   };
-  function makeBody(o) {
-    const { T, hand, pc, pose, face } = o;
-    const side = T.stance === "side";
-    const F = side ? [-hand, 0, 0] : [0, 0, 1];
-    const pl = side ? [0, 0, -1] : [-hand, 0, 0];
-    const fl = [-pl[0], 0, -pl[2]];
-    const rk = (t) => {
-      const p = pose(t);
-      const n = qRot(p.q, [0, 0, face]), l = qRot(p.q, [0, 1, 0]);
-      const c = addmul(p.b, n, -55e-4);
-      return { c, l, n, W: addmul(c, l, -BODY.grip) };
+  var FINGERS = [
+    { mcp: [0.088, -2e-3, 0.027], len: [0.04, 0.024, 0.02], rad: 86e-4 },
+    // 食指
+    { mcp: [0.092, -2e-3, 8e-3], len: [0.044, 0.027, 0.021], rad: 88e-4 },
+    // 中指
+    { mcp: [0.088, -2e-3, -0.011], len: [0.041, 0.025, 0.02], rad: 82e-4 },
+    // 无名指
+    { mcp: [0.08, -2e-3, -0.029], len: [0.032, 0.019, 0.018], rad: 73e-4 }
+    // 小指
+  ];
+  var THUMB = { base: [0.022, 6e-3, 0.034], len: [0.04, 0.03, 0.026], rad: 98e-4 };
+  var FINGER_RAD = [THUMB.rad, ...FINGERS.map((f) => f.rad)];
+  var HANDS = {
+    // 横拍握法：食指贴在反手面下沿，另外三指绕过拍柄，拇指压在正手面
+    shake: {
+      ab: [3, 4, -2, -8],
+      curl: [[10, 4, 2], [86, 96, 42], [88, 98, 44], [90, 100, 46]],
+      thumb: [[0.45, 0.8, 0.4], [0.9, 0.02, -0.44], [0.95, -0.02, -0.3]]
+    },
+    // 发球握法：拇指和食指捏住拍肩，另外三指松开半握
+    serve: {
+      ab: [16, 3, -2, -8],
+      curl: [[24, 16, 10], [52, 56, 30], [58, 60, 32], [62, 62, 34]],
+      thumb: [[0.52, 0.76, 0.4], [0.93, 0.02, -0.36], [0.96, -0.04, -0.26]]
+    },
+    // 托球：手掌摊平，四指并拢，拇指自然张开（规则要求球放在不握拢的手掌上）
+    flat: {
+      ab: [5, 1, -3, -8],
+      curl: [[-4, 3, 2], [-5, 3, 2], [-4, 3, 2], [-2, 4, 3]],
+      thumb: [[0.55, 0.08, 0.83], [0.72, 0.03, 0.69], [0.8, 0, 0.6]]
+    },
+    // 放松：手指自然半弯
+    relax: {
+      ab: [6, 1, -3, -8],
+      curl: [[22, 30, 18], [26, 34, 20], [30, 36, 22], [34, 38, 24]],
+      thumb: [[0.62, 0.38, 0.69], [0.82, 0.3, 0.49], [0.88, 0.28, 0.38]]
+    }
+  };
+  var lerpN = (a, b, f) => a + (b - a) * f;
+  function handPose(a, b, f) {
+    const A = HANDS[a];
+    if (!b || f <= 0) return A;
+    const B = HANDS[b];
+    if (f >= 1) return B;
+    return {
+      ab: A.ab.map((x, i) => lerpN(x, B.ab[i], f)),
+      curl: A.curl.map((c, i) => c.map((x, j) => lerpN(x, B.curl[i][j], f))),
+      thumb: A.thumb.map((c, i) => c.map((x, j) => lerpN(x, B.thumb[i][j], f)))
+    };
+  }
+  function handPoints(W, d, p, r, pose, pose2, f, pinch) {
+    const H = handPose(pose, pose2, f || 0);
+    const at = (c) => [W[0] + c[0] * d[0] + c[1] * p[0] + c[2] * r[0], W[1] + c[0] * d[1] + c[1] * p[1] + c[2] * r[1], W[2] + c[0] * d[2] + c[1] * p[2] + c[2] * r[2]];
+    const arch = (base, tip, nx, ny, nz, h) => [
+      base,
+      [base[0] + (tip[0] - base[0]) * 0.42 + nx * h, base[1] + (tip[1] - base[1]) * 0.42 + ny * h, base[2] + (tip[2] - base[2]) * 0.42 + nz * h],
+      [base[0] + (tip[0] - base[0]) * 0.76 + nx * h * 0.7, base[1] + (tip[1] - base[1]) * 0.76 + ny * h * 0.7, base[2] + (tip[2] - base[2]) * 0.76 + nz * h * 0.7],
+      tip
+    ];
+    const out = [];
+    if (pinch) out.push(arch(at(THUMB.base), pinch.thumb, pinch.n[0], pinch.n[1], pinch.n[2], 0.014));
+    else {
+      let c = THUMB.base.slice();
+      const pts = [at(c)];
+      for (let k = 0; k < 3; k++) {
+        const v = H.thumb[k], vl = Math.hypot(v[0], v[1], v[2]) || 1, L = THUMB.len[k] / vl;
+        c = [c[0] + v[0] * L, c[1] + v[1] * L, c[2] + v[2] * L];
+        pts.push(at(c));
+      }
+      out.push(pts);
+    }
+    for (let i = 0; i < 4; i++) {
+      const fg = FINGERS[i];
+      if (i === 0 && pinch) {
+        out.push(arch(at(fg.mcp), pinch.index, -pinch.n[0], -pinch.n[1], -pinch.n[2], 0.012));
+        continue;
+      }
+      const ab = H.ab[i] * DEG, ca = Math.cos(ab), sa = Math.sin(ab);
+      let c = fg.mcp.slice();
+      const pts = [at(c)];
+      let ang = 0;
+      for (let k = 0; k < 3; k++) {
+        ang += H.curl[i][k] * DEG;
+        const cu = Math.cos(ang), su = Math.sin(ang), L = fg.len[k];
+        c = [c[0] + cu * ca * L, c[1] + su * L, c[2] + cu * sa * L];
+        pts.push(at(c));
+      }
+      out.push(pts);
+    }
+    return out;
+  }
+  function pinchOf(A) {
+    const pt = (x, y, z) => [A.Bc[0] + x * A.Xr[0] + y * A.l[0] + z * A.Zf[0], A.Bc[1] + x * A.Xr[1] + y * A.l[1] + z * A.Zf[1], A.Bc[2] + x * A.Xr[2] + y * A.l[2] + z * A.Zf[2]];
+    return { thumb: pt(6e-3, -0.05, DIM.rubber + 85e-4), index: pt(-0.012, -0.046, -(DIM.rubber + 8e-3)), n: A.Zf };
+  }
+
+  // src/motion.js
+  var clamp2 = (x, a, b) => x < a ? a : x > b ? b : x;
+  var sq = (x) => x * x;
+  var lim2 = (x, r) => x < r[0] ? sq(r[0] - x) : x > r[1] ? sq(x - r[1]) : 0;
+  var H2W = (F, R, v) => [v[0] * F[0] + v[2] * R[0], v[1], v[0] * F[2] + v[2] * R[2]];
+  var mirror = (v) => [-v[0], v[1], v[2]];
+  var EYE = [0, 1.36, 2.9];
+  var hideDepth = (b, c, r) => r - distSeg(c, EYE, b);
+  var MOVES = {
+    // 钟摆：侧身、弯腰，肘在身体外侧架起来，小臂吊着，拍头朝下，从外往肚子方向摆
+    pendulum: {
+      stance: "side",
+      yaw: -90,
+      grip: "serve",
+      headDir: -1,
+      lean: 52,
+      curl: 10,
+      side: 0,
+      twist: -12,
+      ua: [-0.62, 0.3, 0.72],
+      fa: [0.25, -0.93, -0.27],
+      wd: -25,
+      feet: { wide: 0.35, shift: 0.05, fL: 0.07, fR: -0.04, toeL: 28, toeR: 10 },
+      bs: { twist: -8, lean: -5, py: 0.03, wf: -10, wd: 14 },
+      bsD: 0.3,
+      bsLift: 0.22,
+      bsOff: [-0.04, 0, 0.05],
+      fwD: 0.24,
+      ready: { sF: 24, sR: 12, rot: 36, elb: 98, pro: 6, wf: -6, wd: 0, at: [-0.11, 0.07, 0.15] },
+      zone: { f: [0.22, 0.5], r: [-0.28, 0.24] }
+    },
+    // 逆旋转：侧身，肘抬得更高、更靠前，手腕往里扣，拍头朝下，从肚子前面往外甩
+    reverse: {
+      stance: "side",
+      yaw: -90,
+      grip: "serve",
+      headDir: -1,
+      lean: 50,
+      curl: 10,
+      side: 0,
+      twist: -4,
+      ua: [0.3, 0.35, 0.89],
+      fa: [-0.05, -0.95, -0.3],
+      wd: -10,
+      feet: { wide: 0.35, shift: 0.04, fL: 0.07, fR: -0.04, toeL: 28, toeR: 10 },
+      bs: { twist: 5, lean: -4, py: 0.03, wf: 14, wd: -14 },
+      bsD: 0.2,
+      bsLift: 0.16,
+      fwD: 0.26,
+      ready: { sF: 24, sR: 12, rot: 36, elb: 98, pro: 6, wf: -6, wd: 0, at: [-0.11, 0.07, 0.15] },
+      zone: { f: [0.22, 0.5], r: [-0.28, 0.24] }
+    },
+    // 勾手：侧身，拍头朝上收在胸前，手腕内勾，再从里往外、往下勾出去
+    hook: {
+      stance: "side",
+      yaw: -90,
+      grip: "shake",
+      headDir: 1,
+      lean: 46,
+      curl: 8,
+      side: 0,
+      twist: -6,
+      ua: [0.12, -0.42, 0.9],
+      fa: [0.6, 0.32, -0.72],
+      wd: 6,
+      feet: { wide: 0.35, shift: 0.03, fL: 0.07, fR: -0.04, toeL: 28, toeR: 10 },
+      bs: { twist: -5, lean: -4, py: 0.02, wf: 20 },
+      bsD: 0.2,
+      bsLift: 0.24,
+      fwD: 0.24,
+      // 勾手的引拍是固定的样子：拍子收在胸前，拍头朝上，手腕内勾，正手面朝着自己
+      bsPose: { at: [-0.22, 0.2, 0.05], head: [0.15, 0.95, 0.1], face: [-0.92, 0.25, 0.1] },
+      ready: { sF: 24, sR: 12, rot: 36, elb: 98, pro: 6, wf: -6, wd: 0, at: [-0.11, 0.07, 0.15] },
+      zone: { f: [0.22, 0.5], r: [-0.28, 0.24] }
+    },
+    // 反手：正对球台，拍子从左腹前往右前方送，用反手面
+    backhand: {
+      stance: "front",
+      yaw: 24,
+      grip: "shake",
+      lean: 40,
+      curl: 8,
+      side: 0,
+      twist: 14,
+      ua: [0.5, -0.82, -0.02],
+      fa: [0.3, -0.2, -0.93],
+      wd: -4,
+      feet: { wide: 0.33, shift: 0, fL: -0.02, fR: 0.06, toeL: 16, toeR: 12 },
+      bs: { twist: 12, lean: -3, py: 0.02, wf: 12 },
+      bsD: 0.26,
+      bsLift: 0.05,
+      fwD: 0.28,
+      ready: { sF: 30, sR: 4, rot: 50, elb: 92, pro: 30, wf: 0, wd: 0, at: [-0.12, 0.06, 0.12] },
+      zone: { f: [0.25, 0.55], r: [-0.3, 0.1] }
+    }
+  };
+  var REST = {
+    wing: { rel: "sh", at: [-0.46, -0.1, -0.14] },
+    // 往身后甩开，手臂差不多伸直，和肩一样高（弯着腰时很自然，像滑冰的摆臂）
+    back: { rel: "sh", at: [-0.4, -0.25, -0.09] },
+    // 往身后收，低一些
+    hip: { rel: "pel", at: [-0.02, 0.03, -0.27] },
+    // 收到胯边
+    tuck: { rel: "pel", at: [0.17, 0.12, -0.1] },
+    // 收到小腹前
+    low: { rel: "sh", at: [-0.06, -0.44, -0.12] }
+    // 垂在身侧
+  };
+  var ARM_B = [0.55, -0.25, -0.8];
+  var ARM_E = [-0.35, -0.85, -0.4];
+  var SPEED = { px: 0.5, py: 0.35, pz: 0.5, lean: 1.5, twist: 3, sF: 7, sR: 7, rot: 14, elb: 17, pro: 15, wf: 24, wd: 22 };
+  var RATE_IDX = [0, 1, 2, 4, 7, 8, 9, 10, 11, 12, 13, 14];
+  var HARD = [[4, LIM.lean], [5, LIM.curl], [6, LIM.side], [7, LIM.twist], [10, LIM.rot], [11, LIM.elb], [12, null], [13, LIM.wf], [14, null]];
+  var RATE_KEY = ["px", "py", "pz", "lean", "twist", "sF", "sR", "rot", "elb", "pro", "wf", "wd"];
+  function solve3(A, b) {
+    const [a, bb, c] = A[0], [d, e, f] = A[1], [g, h, i] = A[2];
+    const det = a * (e * i - f * h) - bb * (d * i - f * g) + c * (d * h - e * g);
+    if (Math.abs(det) < 1e-14) return null;
+    return [
+      (b[0] * (e * i - f * h) - bb * (b[1] * i - f * b[2]) + c * (b[1] * h - e * b[2])) / det,
+      (a * (b[1] * i - f * b[2]) - b[0] * (d * i - f * g) + c * (d * b[2] - b[1] * g)) / det,
+      (a * (e * b[2] - b[1] * h) - bb * (d * b[2] - b[1] * g) + b[0] * (d * h - e * g)) / det
+    ];
+  }
+  function solveRates(q, g, off, face, vr, S2) {
+    const K0 = bladePoint(fkCore(q, g), off, face);
+    const hs = 1e-5, J = [];
+    for (const i of RATE_IDX) {
+      if (i < 3) {
+        J.push(i === 0 ? [1, 0, 0] : i === 1 ? [0, 1, 0] : [0, 0, 1]);
+        continue;
+      }
+      const q2 = q.slice();
+      q2[i] += hs;
+      const K = bladePoint(fkCore(q2, g), off, face);
+      J.push([(K[0] - K0[0]) / hs, (K[1] - K0[1]) / hs, (K[2] - K0[2]) / hs]);
+    }
+    const A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (let k = 0; k < J.length; k++) {
+      const s2 = S2[k] * S2[k], j = J[k];
+      for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) A[a][b] += s2 * j[a] * j[b];
+    }
+    const lam = solve3(A, vr);
+    if (!lam) return null;
+    const u = new Array(NQ).fill(0);
+    let worst = 0;
+    for (let k = 0; k < J.length; k++) {
+      const r = S2[k] * S2[k] * dot(J[k], lam);
+      u[RATE_IDX[k]] = r;
+      worst = Math.max(worst, Math.abs(r) / S2[k]);
+    }
+    return { u, effort: dot(vr, lam), worst };
+  }
+  function tablePen(p, r) {
+    const below = P.tableY - (p[1] - r);
+    if (below <= 0) return 0;
+    const ox = Math.abs(p[0]) - P.tableW / 2 - r, oz = -P.tableL / 2 - r - p[2];
+    if (ox >= 0 || oz >= 0) return 0;
+    return Math.min(below, -ox, -oz);
+  }
+  function discPen(c, nrm, a, b, rr) {
+    const cp = closestOnSeg(c, a, b);
+    const ux = c[0] - cp[0], uy = c[1] - cp[1], uz = c[2] - cp[2], d = Math.hypot(ux, uy, uz);
+    if (d < 1e-6) return rr + DIM.blade;
+    const un = (ux * nrm[0] + uy * nrm[1] + uz * nrm[2]) / d;
+    const eff = DIM.blade * Math.sqrt(Math.max(0, 1 - un * un)) + 6e-3;
+    return Math.max(0, rr + eff - d);
+  }
+  var spherePen = (p, r, a, b, rr) => Math.max(0, r + rr - distSeg(p, a, b));
+  var distColumn = (p, x, z, y1, y2) => Math.hypot(p[0] - x, p[1] - clamp2(p[1], y1, y2), p[2] - z);
+  function segColumn(a, b, x, z, y1, y2) {
+    let m = 1e9;
+    for (let k = 0; k <= 4; k++) {
+      const f = k / 4, px = a[0] + (b[0] - a[0]) * f, py = a[1] + (b[1] - a[1]) * f, pz = a[2] + (b[2] - a[2]) * f;
+      const d = Math.hypot(px - x, py - clamp2(py, y1, y2), pz - z);
+      if (d < m) m = d;
+    }
+    return m;
+  }
+  function headOf(A, aim) {
+    let lk = norm(sub(aim, A.C));
+    const cf = dot(lk, A.Fc), mx = Math.cos(78 * DEG);
+    if (cf < mx) {
+      const perp = norm(sub(lk, [A.Fc[0] * cf, A.Fc[1] * cf, A.Fc[2] * cf]));
+      const s = Math.sin(78 * DEG);
+      lk = [A.Fc[0] * mx + perp[0] * s, A.Fc[1] * mx + perp[1] * s, A.Fc[2] * mx + perp[2] * s];
+    }
+    const up = 0.14 + 0.5 * Math.max(0, 0.62 - A.Uc[1]);
+    const nd = norm([A.Uc[0] + 0.16 * lk[0], A.Uc[1] + 0.16 * lk[1] + up, A.Uc[2] + 0.16 * lk[2]]);
+    const head = addmul(A.C, nd, DIM.neck + DIM.headR * 0.8);
+    return { head, look: lk, neck: addmul(A.C, nd, 0.03) };
+  }
+  function feetOf(P0, F, R, fe, stance) {
+    const w = fe.wide * stance;
+    const cx = P0[0] + R[0] * fe.shift, cz = P0[2] + R[2] * fe.shift;
+    const rotY = (v, a) => {
+      const c = Math.cos(a), s = Math.sin(a);
+      return [v[0] * c + v[2] * s, 0, -v[0] * s + v[2] * c];
+    };
+    return {
+      AL: [cx - R[0] * w + F[0] * fe.fL, DIM.ankle, cz - R[2] * w + F[2] * fe.fL],
+      AR: [cx + R[0] * w + F[0] * fe.fR, DIM.ankle, cz + R[2] * w + F[2] * fe.fR],
+      toeL: rotY(F, fe.toeL * DEG),
+      toeR: rotY(F, -fe.toeR * DEG),
+      poleL: norm([F[0] - R[0] * 0.4, 0, F[2] - R[2] * 0.4]),
+      poleR: norm([F[0] + R[0] * 0.4, 0, F[2] + R[2] * 0.4])
+    };
+  }
+  var hipsOf = (Pv, R) => ({
+    HL: [Pv[0] - R[0] * DIM.hipHalf, Pv[1] - DIM.hipDrop, Pv[2] - R[2] * DIM.hipHalf],
+    HR: [Pv[0] + R[0] * DIM.hipHalf, Pv[1] - DIM.hipDrop, Pv[2] + R[2] * DIM.hipHalf]
+  });
+  var LEG_MAX = DIM.thigh + DIM.shin - 0.015;
+  function dofLim(i, g) {
+    switch (i) {
+      case 4:
+        return LIM.lean;
+      case 5:
+        return LIM.curl;
+      case 6:
+        return LIM.side;
+      case 7:
+        return LIM.twist;
+      case 10:
+        return LIM.rot;
+      case 11:
+        return LIM.elb;
+      case 12:
+        return g.pro;
+      case 13:
+        return LIM.wf;
+      case 14:
+        return g.wd;
+      default:
+        return [-1e9, 1e9];
+    }
+  }
+  function clampQ(q, g) {
+    for (let i = 4; i < NQ; i++) {
+      const r = dofLim(i, g);
+      q[i] = clamp2(q[i], r[0], r[1]);
+    }
+    const e = Math.hypot(q[8], q[9]);
+    if (e > LIM.elev[1]) {
+      q[8] *= LIM.elev[1] / e;
+      q[9] *= LIM.elev[1] / e;
+    }
+    return q;
+  }
+  var REACH_W = { 4: 0.22, 7: 0.4, 8: 1, 9: 1, 10: 1.1, 11: 1.2 };
+  var ARM3 = [8, 9, 10];
+  var ARM4 = [8, 9, 10, 11];
+  function reach(q0, g, target, iters = 5, opt = null) {
+    const q = q0.slice();
+    const IDX = opt && opt.idx || [8, 9, 10, 11, 4, 7], S2 = IDX.map((i) => REACH_W[i]);
+    const bc = opt && opt.map ? (x) => fkCore(opt.map(x), g).Bc : (x) => fkCore(x, g).Bc;
+    for (let it = 0; it < iters; it++) {
+      const B0 = bc(q), err = sub(target, B0);
+      if (len(err) < 4e-3) break;
+      const J = [];
+      for (const i of IDX) {
+        const q2 = q.slice();
+        q2[i] += 1e-5;
+        const B = bc(q2);
+        J.push([(B[0] - B0[0]) / 1e-5, (B[1] - B0[1]) / 1e-5, (B[2] - B0[2]) / 1e-5]);
+      }
+      const A = [[1e-3, 0, 0], [0, 1e-3, 0], [0, 0, 1e-3]];
+      for (let k = 0; k < J.length; k++) for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) A[a][b] += S2[k] * S2[k] * J[k][a] * J[k][b];
+      const lam = solve3(A, err);
+      if (!lam) break;
+      let mx = 0;
+      const dq = [];
+      for (let k = 0; k < J.length; k++) {
+        const v = S2[k] * S2[k] * dot(J[k], lam);
+        dq.push(v);
+        mx = Math.max(mx, Math.abs(v));
+      }
+      const sc = mx > 0.45 ? 0.45 / mx : 1;
+      for (let k = 0; k < J.length; k++) q[IDX[k]] += dq[k] * sc;
+      clampQ(q, g);
+    }
+    return q;
+  }
+  var hermite1 = (p0, m0, p1, m1, T, u) => {
+    const u2 = u * u, u3 = u2 * u;
+    return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * T * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * T * m1;
+  };
+  function tableLift(p, r) {
+    const below = P.tableY - (p[1] - r);
+    if (below <= 0) return 0;
+    if (Math.abs(p[0]) - P.tableW / 2 - r >= 0 || -P.tableL / 2 - r - p[2] >= 0) return 0;
+    return below;
+  }
+  function tableLiftSoft(p, r) {
+    const below = P.tableY - (p[1] - r);
+    if (below <= 0) return 0;
+    const din = Math.min(P.tableW / 2 + r - Math.abs(p[0]), p[2] + P.tableL / 2 + r);
+    return din <= 0 ? 0 : below * smooth(din / 0.06);
+  }
+  function buildMotion(o) {
+    const mv = MOVES[o.type], pl = o.pl, rng = o.rng;
+    const g = GRIPS[pl.grip && pl.grip[o.type] ? pl.grip[o.type] : mv.grip];
+    const hand = o.hand, face = o.face;
+    const mir = hand < 0;
+    const mx = (v) => mir ? mirror(v) : v;
+    const pc = mx(o.pc), n = mx(o.n), vr = mx(o.vr), vOut = o.vOut ? mx(o.vOut) : null;
+    const ballAt = (t) => mx(o.ballAt(t).p);
+    const pcb = addmul(pc, n, -P.R);
+    const Zt = [n[0] * face, n[1] * face, n[2] * face];
+    const off = o.off || [0, 0];
+    const tRel = o.tRel;
+    const palmLo = (() => {
+      const b = ballAt(-1e6);
+      return [b[0], b[1] - P.R - 0.012, b[2]];
+    })();
+    const palmHi = (() => {
+      const b = ballAt(tRel);
+      return [b[0], b[1] - P.R - 0.012, b[2]];
+    })();
+    const colY1 = pc[1] + 0.06, colY2 = o.tossY[1];
+    const stanceW = pl.stance || 1;
+    const followUp = pl.followUp === void 0 ? 0.1 : pl.followUp;
+    const outPts = [];
+    if (vOut) for (const t of [0.03, 0.06, 0.1, 0.14, 0.19, 0.25]) outPts.push([pc[0] + vOut[0] * t, pc[1] + vOut[1] * t - 0.5 * P.g * t * t, pc[2] + vOut[2] * t]);
+    const recv = [-0.1, 1.25, 1.7];
+    const wr = pl.wrist === void 0 ? 1 : pl.wrist;
+    const S2 = RATE_KEY.map((k) => SPEED[k] * (k === "wf" || k === "wd" || k === "pro" ? wr : k === "sF" || k === "sR" || k === "rot" || k === "elb" ? 1.25 - 0.25 * wr : 1) * (k === "wd" && g.key === "serve" ? 1.25 : 1));
+    const v0 = (() => {
+      const q = new Array(NQ).fill(0);
+      const open = mv.stance === "side" ? 40 * clamp2((0.45 - pc[0]) / 0.9, 0, 1) : 0;
+      q[3] = (mv.yaw + open + (pl.yaw || 0)) * DEG;
+      q[4] = clamp2((mv.lean + (pl.lean || 0)) * DEG, LIM.lean[0], LIM.lean[1]);
+      q[5] = mv.curl * DEG;
+      q[6] = mv.side * DEG;
+      q[7] = mv.twist * DEG;
+      const A = fkCore(q, g);
+      const an = dirsToAngles(A, norm(H2W(A.F, A.R, mv.ua)), norm(H2W(A.F, A.R, mv.fa)));
+      return [q[3], q[4], q[5], q[6], q[7], an.sF, an.sR, an.rot, an.elb, clamp2((mv.wd + (pl.wd || 0)) * DEG, g.wd[0], g.wd[1])];
+    })();
+    const RNG = [30 * DEG, 12 * DEG, 8 * DEG, 8 * DEG, 18 * DEG, 0.5, 0.5, 0.6, 0.5, 0.4];
+    const LO = [v0[0] - 48 * DEG, LIM.lean[0], 0, -15 * DEG, -42 * DEG, -2.3, -2.3, LIM.rot[0], LIM.elb[0], g.wd[0]];
+    const HI = [v0[0] + 48 * DEG, LIM.lean[1], 28 * DEG, 15 * DEG, 42 * DEG, 2.3, 2.3, LIM.rot[1], LIM.elb[1], g.wd[1]];
+    const WPREF = [0.5, 0.7, 0.2, 0.6, 0.3, 0.3, 0.3, 0.15, 0.25, 0.35];
+    if (o.kind === "pure" && (o.type === "reverse" || o.type === "hook")) for (const i of [5, 6, 7, 8, 9]) WPREF[i] *= 0.4;
+    const py0 = pl.py || 0.8;
+    const riseR = (pl.rise === void 0 ? 28 : pl.rise) * DEG;
+    const V = len(vr);
+    const bsAmp = pl.bs === void 0 ? 1 : pl.bs;
+    const Db = mv.bsD * bsAmp * (0.8 + 0.035 * V);
+    const T1max = clamp2(Math.max(1.6 * Db / Math.max(V, 1), (pl.tempo || 0.25) * 0.62), 0.13, 0.34);
+    const T1body = clamp2(-tRel - 0.12, T1max, 0.4);
+    const tb0 = Math.min(Math.max(tRel - 0.03, -T1max - (pl.bsT || 0.42)), -T1max - 0.14, -T1body - 0.02);
+    const riseH = Math.min(riseR * 0.45, 110 * DEG * T1body / 1.5);
+    const riseT = Math.min(riseR, riseH + 70 * DEG * Math.max(0, -T1body - tb0) / 1.5, 110 * DEG * T1body / 1.5);
+    const bsTw = (mv.bs.twist || 0) * DEG * bsAmp;
+    const seeT = [];
+    {
+      const HOLD = [riseH, 0.03, 0.4, 0], TALL = [riseT, 0.05, 1, bsTw], HIT = [0, 0, 1, 0];
+      const mix = (a, b, k) => a.map((x, i) => x + (b[i] - x) * k);
+      for (const t of [-0.015, -0.045, -0.08, -0.12, -0.17, -0.23, -0.3, -0.38, -0.47, -0.57, -0.68, -0.8, -0.95]) {
+        if (t < tRel + 0.05) break;
+        const ps = t >= -T1body ? mix(TALL, HIT, smooth((t + T1body) / T1body)) : t > tb0 ? mix(HOLD, TALL, smooth((t - tb0) / (-T1body - tb0))) : HOLD;
+        seeT.push({ t, b: ballAt(t), hit: t >= -T1body && ps[0] < 0.06 * riseT + 1e-9, rise: ps[0], py: ps[1], ta: ps[2], tb: ps[3] });
+      }
+    }
+    const evalPose = (v, bound) => {
+      const q = new Array(NQ).fill(0);
+      q[3] = v[0];
+      q[4] = v[1];
+      q[5] = v[2];
+      q[6] = v[3];
+      q[7] = v[4];
+      q[8] = v[5];
+      q[9] = v[6];
+      q[10] = v[7];
+      q[11] = v[8];
+      q[14] = v[9];
+      const A = fkCore(q, g, Zt);
+      if (!A) return null;
+      if (q[12] < g.pro[0] || q[12] > g.pro[1] || q[13] < LIM.wf[0] || q[13] > LIM.wf[1] || A.elev > LIM.elev[1]) return null;
+      const s = sub(pcb, bladePoint(A, off, face));
+      q[0] = s[0];
+      q[1] = s[1];
+      q[2] = s[2];
+      shiftState(A, s);
+      let c = 0;
+      c += 260 * (lim2(q[12], g.pro) + lim2(q[13], LIM.wf) + lim2(q[10], LIM.rot) + lim2(q[11], LIM.elb) + lim2(A.elev, LIM.elev) + lim2(q[14], g.wd));
+      c += 0.35 * sq(q[13]) + 0.2 * sq(q[12] / 1.3) + 0.1 * sq((q[10] - 0.2) / 1.2);
+      c += 0.8 * sq(Math.max(0, q[11] - 126 * DEG) / 0.3) + 0.4 * sq(Math.max(0, 55 * DEG - q[11]) / 0.4);
+      c += 2.5 * sq(Math.max(0, q[4] - 60 * DEG) / (8 * DEG));
+      const ub = -dot(A.ua, A.Fc), uc = -dot(A.ua, A.Rc), uu = dot(A.ua, A.Uc);
+      c += 260 * (sq(Math.max(0, ub - 0.6)) + sq(Math.max(0, uc - 0.5)) + sq(4 * Math.max(0, ub - 0.25) * Math.max(0, uu - 0.25)));
+      const cLim = c;
+      for (let i = 0; i < 10; i++) c += WPREF[i] * sq((v[i] - v0[i]) / RNG[i]);
+      if (mv.headDir) {
+        const k = 1 - Zt[1] * Zt[1];
+        if (k > 0.1) {
+          const kl = Math.sqrt(k), cosd = (A.l[0] * Zt[0] * Zt[1] + A.l[1] * (Zt[1] * Zt[1] - 1) + A.l[2] * Zt[2] * Zt[1]) / kl;
+          c += 2.5 * k * sq(Math.max(0, 0.3 + mv.headDir * cosd) / 0.5);
+        }
+      }
+      const cPref = c - cLim;
+      if (c >= bound) return null;
+      c += 300 * lim2(q[1], [0.56, 0.93]) + 60 * sq(q[1] - py0);
+      const ft2 = feetOf(A.P, A.F, A.R, mv.feet, stanceW), hp = hipsOf(A.P, A.R);
+      const dL = len(sub(hp.HL, ft2.AL)), dR = len(sub(hp.HR, ft2.AR));
+      c += 400 * (sq(Math.max(0, dL - LEG_MAX + 0.03)) + sq(Math.max(0, dR - LEG_MAX + 0.03)));
+      const cLeg = c - cLim - cPref;
+      if (c >= bound) return null;
+      const KL = ik2(hp.HL, ft2.AL, ft2.poleL, DIM.thigh, DIM.shin).E, KR = ik2(hp.HR, ft2.AR, ft2.poleR, DIM.thigh, DIM.shin).E;
+      let tp = sq(tablePen(A.P, 0.175)) + sq(tablePen(A.M, 0.14)) + sq(tablePen(A.C, 0.145)) + sq(tablePen(A.E, 0.06)) + sq(tablePen(A.W, 0.05));
+      tp += sq(tablePen(hp.HL, 0.105)) + sq(tablePen(hp.HR, 0.105)) + sq(tablePen(KL, 0.085)) + sq(tablePen(KR, 0.085));
+      tp += sq(tablePen([ft2.AL[0] + ft2.toeL[0] * 0.1, 0.05, ft2.AL[2] + ft2.toeL[2] * 0.1], 0.04)) + sq(tablePen([ft2.AR[0] + ft2.toeR[0] * 0.1, 0.05, ft2.AR[2] + ft2.toeR[2] * 0.1], 0.04));
+      tp += sq(tablePen(lerp(hp.HL, KL, 0.5), 0.095)) + sq(tablePen(lerp(hp.HR, KR, 0.5), 0.095));
+      c += 900 * tp;
+      const hd = headOf(A, pc).head;
+      const caps = [[A.P, A.M, DIM.rLo], [A.M, A.C, DIM.rHi], [hd, hd, DIM.headR], [hp.HL, KL, DIM.rThigh], [hp.HR, KR, DIM.rThigh]];
+      const hnd = addmul(A.W, A.dd, 0.05), fm = lerp(A.E, A.W, 0.55);
+      let sp = 0;
+      for (const [a, b, rr] of caps) {
+        sp += sq(discPen(A.Bc, A.Zf, a, b, rr + 0.025)) + sq(spherePen(hnd, 0.045, a, b, rr + 0.02)) + sq(spherePen(fm, DIM.rFore, a, b, rr + 0.015));
+      }
+      sp += sq(spherePen(A.E, 0.046, A.P, A.M, DIM.rLo)) + sq(spherePen(A.E, 0.046, A.M, A.C, DIM.rHi - 0.02)) + sq(spherePen(A.E, 0.046, hd, hd, DIM.headR));
+      c += 500 * sp;
+      let cp = sq(Math.max(0, DIM.headR + P.R + 0.04 - distColumn(hd, pc[0], pc[2], colY1, colY2)));
+      cp += 0.2 * sq(Math.max(0, 0.34 - len(sub(hd, pc)))) + 0.4 * sq(Math.max(0, pc[1] + 0.16 - hd[1]));
+      for (const [pt, rr] of [[A.M, DIM.rLo], [lerp(A.M, A.C, 0.5), DIM.rHi], [A.C, DIM.rHi], [A.SL, 0.065]]) cp += sq(Math.max(0, rr + P.R + 0.025 - distColumn(pt, pc[0], pc[2], colY1, colY2)));
+      cp += sq(Math.max(0, DIM.rUpper + 0.012 + P.R + 0.03 - segColumn(A.SR, A.E, pc[0], pc[2], colY1, colY2)));
+      const hd2 = headOf(A, recv).head;
+      for (const bp of outPts) {
+        cp += sq(Math.max(0, DIM.headR + P.R + 0.045 - len(sub(bp, hd)))) + sq(Math.max(0, DIM.headR + P.R + 0.045 - len(sub(bp, hd2)))) + sq(Math.max(0, DIM.rHi + P.R + 0.03 - distSeg(bp, A.M, A.C))) + sq(Math.max(0, DIM.rLo + P.R + 0.03 - distSeg(bp, A.P, A.M)));
+        cp += sq(Math.max(0, 0.07 + P.R + 0.03 - len(sub(bp, A.SL)))) + sq(Math.max(0, DIM.rThigh + P.R + 0.02 - distSeg(bp, hp.HL, KL)));
+      }
+      c += 500 * cp;
+      const TRh = trunkLite(q[0], q[1] + 0.03, q[2], q[3], Math.max(LIM.lean[0], q[4] - riseH), q[5], q[6], q[7] * 0.4);
+      const TRt = trunkLite(q[0], q[1] + 0.05, q[2], q[3], Math.max(LIM.lean[0], q[4] - riseT), q[5], q[6], q[7] + bsTw);
+      let fr = 0;
+      const yTop = palmHi[1] + followUp + 0.08;
+      {
+        const zf = (pc[0] - TRt.C[0]) * A.F[0] + (pc[2] - TRt.C[2]) * A.F[2], zr = (pc[0] - TRt.C[0]) * A.R[0] + (pc[2] - TRt.C[2]) * A.R[2];
+        fr += 0.25 * (lim2(zf, mv.zone.f) + lim2(zr, mv.zone.r));
+      }
+      for (const TR of [TRh, TRt]) {
+        fr += sq(Math.max(0, DIM.headR + 0.085 - distColumn(TR.head, pc[0], pc[2], palmLo[1], yTop)));
+        fr += sq(Math.max(0, DIM.rHi + 0.08 - distSeg([pc[0], clamp2(lerp(TR.M, TR.C, 0.5)[1], palmLo[1], yTop), pc[2]], TR.M, TR.C)));
+      }
+      for (const [TR, pm] of [[TRh, palmLo], [TRt, [palmHi[0], palmHi[1] + followUp, palmHi[2]]]]) {
+        const d = len(sub(pm, TR.SL));
+        fr += 0.6 * (sq(Math.max(0, d - 0.5)) + sq(Math.max(0, 0.2 - d)));
+        for (const f of [0.75, 1]) {
+          const pt = lerp(TR.SL, pm, f);
+          fr += sq(Math.max(0, DIM.rHi + 0.07 - distSeg(pt, TR.M, TR.C))) + sq(Math.max(0, DIM.rLo + 0.07 - distSeg(pt, TR.P, TR.M))) + sq(Math.max(0, DIM.headR + 0.065 - len(sub(pt, TR.head))));
+        }
+      }
+      c += 500 * fr;
+      let see = 0;
+      const blk = (b, pt, rr) => sq(Math.max(0, hideDepth(b, pt, rr) + P.R + 0.022));
+      for (const sT of seeT) {
+        const b = sT.b;
+        if (sT.hit) {
+          see += blk(b, headOf(A, b).head, DIM.headR) + blk(b, A.C, DIM.rHi) + blk(b, lerp(A.M, A.C, 0.5), DIM.rHi) + blk(b, A.M, DIM.rLo) + blk(b, A.SL, 0.066);
+          see += blk(b, A.SR, 0.066) + blk(b, lerp(A.SR, A.E, 0.5), DIM.rUpper + 4e-3) + blk(b, A.E, 0.046);
+        } else {
+          const TR = trunkLite(q[0], q[1] + sT.py, q[2], q[3], Math.max(LIM.lean[0], q[4] - sT.rise), q[5], q[6], sT.ta * q[7] + sT.tb);
+          see += blk(b, headOf(TR, b).head, DIM.headR) + blk(b, TR.C, DIM.rHi) + blk(b, lerp(TR.M, TR.C, 0.5), DIM.rHi) + blk(b, TR.M, DIM.rLo) + blk(b, TR.SL, 0.066);
+        }
+      }
+      c += (globalThis.__seeW === void 0 ? 2500 : globalThis.__seeW) * see;
+      if (c >= bound) return null;
+      const rt = solveRates(q, g, off, face, vr, S2);
+      if (!rt) return null;
+      {
+        const u = rt.u, h = 5e-3;
+        for (const [i, r] of HARD) {
+          const lo = r || (i === 12 ? g.pro : g.wd), a = q[i] - u[i] * h, b = q[i] + u[i] * h;
+          if (Math.min(a, b) < lo[0] || Math.max(a, b) > lo[1]) return null;
+        }
+        if (Math.max(Math.hypot(q[8] - u[8] * h, q[9] - u[9] * h), Math.hypot(q[8] + u[8] * h, q[9] + u[9] * h)) > LIM.elev[1]) return null;
+        if (Math.max(dL, dR) > LEG_MAX - 6e-3) return null;
+      }
+      c += 0.45 * rt.effort + 4 * sq(Math.max(0, rt.worst - 1.15));
+      if (c >= bound) return null;
+      return { v: v.slice(), q, A, cost: c, rt, ft: ft2, effort: rt.effort, worst: rt.worst, parts: { lim: cLim, pref: cPref, leg: cLeg, table: 900 * tp, self: 500 * sp, col: 500 * cp, free: 500 * fr, see: 2500 * see, effort: 0.45 * rt.effort + 4 * sq(Math.max(0, rt.worst - 1.15)) } };
+    };
+    let best = null;
+    const starts = [];
+    const seed = (v) => {
+      const r = evalPose(v, starts.length >= 3 ? starts[starts.length - 1].cost : 1e9);
+      if (!r) return;
+      const near = starts.findIndex((s2) => Math.abs(s2.v[0] - r.v[0]) < 16 * DEG);
+      if (near >= 0) {
+        if (r.cost < starts[near].cost) starts[near] = r;
+        else return;
+      } else starts.push(r);
+      starts.sort((a, b) => a.cost - b.cost);
+      if (starts.length > 3) starts.length = 3;
+    };
+    for (const dy of [0, -22, 22, -40, 40]) for (const dl of [0, -9, 9]) for (const de of [0, -0.35, 0.35]) {
+      const v = v0.slice();
+      v[0] += dy * DEG;
+      v[1] = clamp2(v[1] + dl * DEG, LO[1], HI[1]);
+      v[8] = clamp2(v[8] + de, LO[8], HI[8]);
+      seed(v);
+    }
+    for (let k = 0; k < 90; k++) {
+      const v = v0.map((x, i) => clamp2(x + (rng() * 2 - 1) * RNG[i] * 1.2, LO[i], HI[i]));
+      seed(v);
+    }
+    for (let k = 0; k < 500 && !starts.length; k++) {
+      const v = v0.map((x, i) => clamp2(x + (rng() * 2 - 1) * RNG[i] * 2.2, LO[i], HI[i]));
+      seed(v);
+    }
+    if (!starts.length) return { ok: false, why: "pose" };
+    const step = (sc) => {
+      const v = best.v.slice();
+      const m = 1 + Math.floor(rng() * 4);
+      for (let k = 0; k < m; k++) {
+        const i = Math.floor(rng() * 10);
+        v[i] = clamp2(v[i] + (rng() * 2 - 1) * sc * RNG[i], LO[i], HI[i]);
+      }
+      const r = evalPose(v, best.cost);
+      if (r) best = r;
+    };
+    {
+      let top = null;
+      for (const s0 of starts) {
+        best = s0;
+        for (let it = 0; it < 55; it++) step(0.55);
+        if (!top || best.cost < top.cost) top = best;
+      }
+      best = top;
+    }
+    const N = 200;
+    for (let it = 0; it < N; it++) step(it < N * 0.3 ? 0.55 : it < N * 0.75 ? 0.22 : 0.08);
+    if (o.dbg) o.dbg(best);
+    if (best.cost > 14) return { ok: false, why: "pose-cost" };
+    const qC = best.q, uC = best.rt.u, ft = best.ft, AC = best.A;
+    const hpC = hipsOf(AC.P, AC.R);
+    const legFix = (q) => {
+      for (let k = 0; k < 3; k++) {
+        const sy = Math.sin(q[3]), cy = Math.cos(q[3]), hp = hipsOf(q, [-cy, 0, sy]);
+        const ex = Math.max(len(sub(hp.HL, ft.AL)), len(sub(hp.HR, ft.AR))) - LEG_MAX;
+        if (ex <= 0) break;
+        q[1] -= ex * 1.3 + 2e-3;
+      }
+      return q;
+    };
+    const outOfTable = (q) => {
+      for (let k = 0; k < 3; k++) {
+        const pen = tablePen(q, 0.17);
+        if (pen <= 0) break;
+        const ox = P.tableW / 2 + 0.17 - Math.abs(q[0]), oz = q[2] + P.tableL / 2 + 0.17;
+        if (ox < oz) q[0] += Math.sign(q[0] || 1) * (ox + 5e-3);
+        else q[2] -= oz + 5e-3;
+      }
+      legFix(q);
+      for (let k = 0; k < 3; k++) {
+        const sy = Math.sin(q[3]), cy = Math.cos(q[3]), hp = hipsOf(q, [-cy, 0, sy]);
+        let moved = false;
+        for (const [H, A_, pole] of [[hp.HL, ft.AL, ft.poleL], [hp.HR, ft.AR, ft.poleR]]) {
+          const K = ik2(H, A_, pole, DIM.thigh, DIM.shin).E;
+          if (tablePen(K, 0.078) <= 0) continue;
+          const ox = P.tableW / 2 + 0.078 - Math.abs(K[0]), oz = K[2] + P.tableL / 2 + 0.078;
+          if (ox < oz) q[0] += Math.sign(K[0] || 1) * (ox * 1.6 + 4e-3);
+          else q[2] -= oz * 1.6 + 4e-3;
+          moved = true;
+        }
+        if (!moved) break;
+        legFix(q);
+      }
+      return q;
+    };
+    const posePen = (q, col, target) => {
+      const A = fkCore(q, g);
+      const hp = hipsOf(A.P, A.R);
+      const KL = ik2(hp.HL, ft.AL, ft.poleL, DIM.thigh, DIM.shin).E, KR = ik2(hp.HR, ft.AR, ft.poleR, DIM.thigh, DIM.shin).E;
+      const hd = headOf(A, pc).head;
+      const hnd = addmul(A.W, A.dd, 0.05), fm = lerp(A.E, A.W, 0.55);
+      let pen = 0;
+      for (const [a, b, rr] of [[A.P, A.M, DIM.rLo], [A.M, A.C, DIM.rHi], [hd, hd, DIM.headR], [hp.HL, KL, DIM.rThigh], [hp.HR, KR, DIM.rThigh]]) {
+        pen += sq(discPen(A.Bc, A.Zf, a, b, rr + 0.02)) + sq(spherePen(hnd, 0.045, a, b, rr + 0.015)) + sq(spherePen(fm, DIM.rFore, a, b, rr + 0.012));
+      }
+      pen += sq(spherePen(A.E, 0.046, A.P, A.M, DIM.rLo)) + sq(spherePen(A.E, 0.046, hd, hd, DIM.headR));
+      const drop = DIM.blade * Math.sqrt(Math.max(0, 1 - A.Zf[1] * A.Zf[1]));
+      pen += sq(tablePen([A.Bc[0], A.Bc[1] - drop + 0.02, A.Bc[2]], 0.03)) + sq(tablePen(hnd, 0.05)) + sq(tablePen(A.E, 0.055)) + sq(tablePen(A.W, 0.045));
+      pen += sq(tablePen(A.P, 0.16)) + sq(tablePen(KL, 0.075)) + sq(tablePen(KR, 0.075));
+      if (col) {
+        const y2 = Math.max(colY2, palmHi[1] + followUp + 0.1);
+        const dc = (p) => distColumn(p, pc[0], pc[2], palmLo[1], y2);
+        if (col !== 2) {
+          pen += sq(Math.max(0, DIM.headR + 0.085 - dc(hd))) + sq(Math.max(0, DIM.rHi + 0.08 - distSeg([pc[0], clamp2(lerp(A.M, A.C, 0.5)[1], palmLo[1], y2), pc[2]], A.M, A.C)));
+          pen += sq(Math.max(0, DIM.rLo + 0.07 - dc(A.M)));
+        }
+        for (const [pt, rr] of [[A.Bc, DIM.blade + 0.01], [hnd, 0.05]]) pen += sq(Math.max(0, rr + P.R + 0.03 - distColumn(pt, pc[0], pc[2], colY1 - 0.1, y2)));
+        pen += sq(Math.max(0, DIM.rUpper + 0.012 + P.R + 0.03 - segColumn(A.SR, A.E, pc[0], pc[2], colY1 - 0.1, y2))) + sq(Math.max(0, DIM.rFore + 0.01 + P.R + 0.03 - segColumn(A.E, A.W, pc[0], pc[2], colY1 - 0.1, y2)));
+      }
+      const hard = pen;
+      if (target) pen += 0.6 * (sq(A.Bc[0] - target[0]) + sq(A.Bc[1] - target[1]) + sq(A.Bc[2] - target[2]));
+      return { pen, hard };
+    };
+    const REP = [[8, 0.3], [9, 0.3], [10, 0.4], [11, 0.3], [7, 0.2], [4, 0.12], [13, 0.3], [14, 0.3], [12, 0.3]];
+    const REP_ARM = REP.filter((r) => r[0] >= 8);
+    const repair = (q0, col, target, iters = 70, extra = null, opt = null) => {
+      const REPL = opt && opt.arm ? REP_ARM : REP, map = opt && opt.map;
+      const pen = (q2) => {
+        const r = posePen(map ? map(q2) : q2, col, target);
+        if (extra) {
+          const e = extra(q2);
+          r.pen += e;
+          r.hard += e;
+        }
+        return r;
+      };
+      let q = outOfTable(q0.slice()), cur = pen(q);
+      if (cur.hard < 1e-7) return { q, hard: 0 };
+      for (let it = 0; it < iters && cur.hard > 1e-7; it++) {
+        const sc = it < iters * 0.5 ? 1 : 0.4, q2 = q.slice();
+        const m = 1 + Math.floor(rng() * 3);
+        for (let k = 0; k < m; k++) {
+          const [i, r] = REPL[Math.floor(rng() * REPL.length)];
+          q2[i] += (rng() * 2 - 1) * r * sc;
+        }
+        clampQ(q2, g);
+        outOfTable(q2);
+        const c2 = pen(q2);
+        if (c2.pen < cur.pen) {
+          q = q2;
+          cur = c2;
+        }
+      }
+      return { q, hard: cur.hard };
+    };
+    const KL0 = ik2(hpC.HL, ft.AL, ft.poleL, DIM.thigh, DIM.shin).E, KR0 = ik2(hpC.HR, ft.AR, ft.poleR, DIM.thigh, DIM.shin).E;
+    const hdC = headOf(AC, pc).head;
+    const avoid = (tg, colClear) => {
+      const p = tg.slice();
+      for (let it = 0; it < 3; it++) {
+        for (const [a, b2, rr] of [[AC.P, AC.M, DIM.rLo], [AC.M, AC.C, DIM.rHi], [hpC.HL, KL0, DIM.rThigh], [hpC.HR, KR0, DIM.rThigh], [hdC, hdC, DIM.headR]]) {
+          const cp = closestOnSeg(p, a, b2), d = Math.hypot(p[0] - cp[0], p[1] - cp[1], p[2] - cp[2]), need = rr + 0.115;
+          if (d < need && d > 1e-6) {
+            const k = (need - d) / d;
+            p[0] += (p[0] - cp[0]) * k;
+            p[1] += (p[1] - cp[1]) * k;
+            p[2] += (p[2] - cp[2]) * k;
+          }
+        }
+        p[1] += tableLift(p, 0.1);
+        if (colClear) {
+          const dx = p[0] - pc[0], dz = p[2] - pc[2], dc = Math.hypot(dx, dz);
+          if (dc < colClear && dc > 1e-6 && p[1] > pc[1] - 0.05) {
+            p[0] += dx / dc * (colClear - dc);
+            p[2] += dz / dc * (colClear - dc);
+          }
+        }
+      }
+      return p;
+    };
+    const hv = Math.hypot(vr[0], vr[2]);
+    const dh = hv > 0.8 ? [vr[0] / hv, 0, vr[2] / hv] : norm(H2W(AC.F, AC.R, mv.swingDir || [0, 0, -1]));
+    const vd = V > 0.3 ? [vr[0] / V, vr[1] / V, vr[2] / V] : dh;
+    const QR = qC.slice();
+    QR[1] = qC[1] + 0.03;
+    QR[4] = clamp2(qC[4] - riseH, LIM.lean[0], LIM.lean[1]);
+    QR[7] = qC[7] * 0.4;
+    {
+      const rd = mv.ready;
+      QR[8] = rd.sF * DEG;
+      QR[9] = rd.sR * DEG;
+      QR[10] = rd.rot * DEG;
+      QR[11] = rd.elb * DEG;
+      QR[12] = rd.pro * DEG;
+      QR[13] = rd.wf * DEG;
+      QR[14] = rd.wd * DEG;
+    }
+    legFix(QR);
+    {
+      const early = seeT.filter((sT) => sT.t <= tb0 + 0.05);
+      for (let k = 0; k < 7; k++) {
+        const A2 = fkCore(QR, g), hd = headOf(A2, [pc[0], palmHi[1] + 0.3, pc[2]]).head, y2 = palmHi[1] + followUp + 0.1;
+        const dH = distColumn(hd, pc[0], pc[2], palmLo[1], y2) - DIM.headR - 0.09;
+        const dC = Math.min(distSeg([pc[0], clamp2(A2.C[1], palmLo[1], y2), pc[2]], A2.M, A2.C), distSeg([pc[0], clamp2(A2.M[1], palmLo[1], y2), pc[2]], A2.M, A2.C)) - DIM.rHi - 0.085;
+        let dS = 1;
+        for (const sT of early) dS = Math.min(dS, -hideDepth(sT.b, headOf(A2, sT.b).head, DIM.headR) - P.R - 0.015, -hideDepth(sT.b, A2.C, DIM.rHi) - P.R - 0.015, -hideDepth(sT.b, A2.SL, 0.066) - P.R - 0.015);
+        if (dH >= 0 && dC >= 0 && dS >= 0) break;
+        QR[4] = Math.max(LIM.lean[0], QR[4] - 4 * DEG);
+        QR[0] -= A2.F[0] * 0.015;
+        QR[2] -= A2.F[2] * 0.015;
+        legFix(QR);
+      }
+      const A = fkCore(QR, g), o3 = H2W(A.F, A.R, pl.readyAt || mv.ready.at);
+      const tg = [palmLo[0] + o3[0], palmLo[1] + o3[1], palmLo[2] + o3[2]];
+      const rp = repair(reach(QR, g, tg, 5, { idx: ARM4 }), false, tg, 40, null, { arm: true });
+      for (let i = 0; i < NQ; i++) QR[i] = rp.q[i];
+    }
+    const LATE = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.85, 0.62, 0.5, 0.5];
+    const QB = qC.slice(), T1 = LATE.map((k) => T1max * k);
+    for (const i of [0, 1, 2, 4, 5, 6, 7]) T1[i] = T1body;
+    let Df = (mv.fwD || 0.26) * (pl.follow || 1) * (0.75 + 0.04 * V);
+    {
+      const lowC = AC.Bc[1] - DIM.blade * Math.sqrt(Math.max(0, 1 - AC.Zf[1] * AC.Zf[1]));
+      for (let d = 0.03; d <= Df + 1e-9; d += 0.015) {
+        const p = [AC.Bc[0] + vd[0] * d, lowC + Math.min(0, vd[1] * d), AC.Bc[2] + vd[2] * d];
+        if (tableLift(p, 0.05) > 0) {
+          Df = Math.max(0.05, d - 0.04);
+          break;
+        }
+        const pb = [AC.Bc[0] + vd[0] * d, AC.Bc[1] + vd[1] * d, AC.Bc[2] + vd[2] * d];
+        if (distSeg(pb, AC.P, AC.M) < DIM.rLo + 0.1 || distSeg(pb, AC.M, AC.C) < DIM.rHi + 0.1 || len(sub(pb, hdC)) < DIM.headR + 0.11 || distSeg(pb, hpC.HL, KL0) < DIM.rThigh + 0.09 || distSeg(pb, hpC.HR, KR0) < DIM.rThigh + 0.09) {
+          Df = Math.max(0.05, d - 0.03);
+          break;
+        }
+      }
+    }
+    let T2max = clamp2(2 * Df / Math.max(V, 0.8), 0.07, 0.3);
+    const QF = qC.slice(), T2 = LATE.map((k) => T2max * (0.6 + 0.4 * k));
+    for (const i of [12, 13, 14]) {
+      const v = uC[i], av = Math.abs(v), sg = Math.sign(v), r = dofLim(i, g), mg = 3 * DEG;
+      if (av < 1e-3) continue;
+      const availB = Math.max(0, sg > 0 ? qC[i] - r[0] - mg : r[1] - mg - qC[i]);
+      const dB = Math.min(0.6 * av * T1[i] * Math.min(1.2, bsAmp), availB);
+      T1[i] = clamp2(dB / (0.6 * av), 0.05, T1[i]);
+      QB[i] = qC[i] - sg * dB;
+      const availF = Math.max(0, sg > 0 ? r[1] - mg - qC[i] : qC[i] - r[0] - mg);
+      const dF = Math.min(0.5 * av * T2[i], availF);
+      T2[i] = clamp2(dF / (0.5 * av), 0.05, T2[i]);
+      QF[i] = qC[i] + sg * dF;
+    }
+    const bsKey = { px: 0, py: 1, pz: 2, lean: 4, curl: 5, side: 6, twist: 7, sF: 8, sR: 9, rot: 10, elb: 11, pro: 12, wf: 13, wd: 14 };
+    for (const k of Object.keys(mv.bs)) {
+      const i = bsKey[k];
+      QB[i] += mv.bs[k] * (k === "py" ? 1 : DEG) * bsAmp;
+    }
+    for (const i of [0, 2, 5, 6]) QB[i] = QR[i];
+    QB[1] = qC[1] + 0.05;
+    QB[4] = clamp2(qC[4] - riseT, LIM.lean[0], LIM.lean[1]);
+    clampQ(QB, g);
+    legFix(QB);
+    const preAt = (qb, t) => {
+      const q = new Array(NQ);
+      for (let i = 0; i < NQ; i++) {
+        const t1 = T1[i];
+        q[i] = t <= tb0 ? QR[i] : t < -t1 ? QR[i] + (qb[i] - QR[i]) * smooth((t - tb0) / (-t1 - tb0)) : hermite1(qb[i], 0, qC[i], uC[i], t1, (t + t1) / t1);
+      }
+      return legFix(clampQ(q, g));
+    };
+    const atSwing0 = (qb) => preAt(qb, -T1max);
+    const SW_T = [tb0 + 0.4 * (-T1max - tb0), tb0 + 0.75 * (-T1max - tb0), ...[0, 0.18, 0.35, 0.6, 0.78, 0.9, 0.96].map((f) => -T1max * (1 - f))];
+    const swingPen = (qb) => {
+      let pen = 0;
+      for (const t of SW_T) {
+        const q = preAt(qb, t);
+        pen += posePen(q, false, null).hard;
+        if (t < Math.max(tRel + 0.03, -T1max - 1e-9)) continue;
+        const A = fkCore(q, g), b = ballAt(t);
+        pen += sq(Math.max(0, DIM.rUpper + P.R + 0.03 - distSeg(b, A.SR, A.E))) + sq(Math.max(0, DIM.rFore + P.R + 0.025 - distSeg(b, A.E, A.W)));
+        const hd = headOf(A, b).head;
+        pen += sq(Math.max(0, DIM.headR + P.R + 0.03 - len(sub(b, hd)))) + sq(Math.max(0, DIM.rHi + P.R + 0.02 - distSeg(b, A.M, A.C)));
+        pen += sq(discPen(A.Bc, A.Zf, hd, hd, DIM.headR + 0.06)) * 0.5;
+        for (const [pt, rr] of [[lerp(A.SR, A.E, 0.5), DIM.rUpper], [A.E, 0.044], [lerp(A.E, A.W, 0.5), DIM.rFore]]) pen += sq(Math.max(0, hideDepth(b, pt, rr) + P.R + 6e-3));
+        {
+          const rl = sub(b, A.Bc), dn = dot(rl, A.Zf), rho = len(sub(rl, [A.Zf[0] * dn, A.Zf[1] * dn, A.Zf[2] * dn]));
+          if (rho < DIM.blade + 0.01) pen += sq(Math.max(0, P.R + DIM.rubber + 6e-3 - Math.abs(dn))) * 4;
+        }
+      }
+      return pen;
+    };
+    {
+      const bo = H2W(AC.F, AC.R, mv.bsOff || [0, 0, 0]);
+      const tg = avoid([AC.Bc[0] - dh[0] * Db + bo[0], AC.Bc[1] + mv.bsLift * bsAmp + bo[1], AC.Bc[2] - dh[2] * Db + bo[2]], 0.19);
+      QB[11] = clamp2(qC[11] + 8 * DEG, 88 * DEG, 126 * DEG);
+      let q2 = reach(QB, g, tg, 7, { idx: ARM3, map: atSwing0 });
+      if (len(sub(fkCore(atSwing0(q2), g).Bc, tg)) > 0.07) {
+        q2 = reach(q2, g, tg, 4, { idx: ARM4, map: atSwing0 });
+        q2[11] = Math.max(q2[11], 62 * DEG);
+      }
+      const rp = repair(legFix(q2), 2, tg, 80, swingPen, { arm: true, map: atSwing0 });
+      for (let i = 0; i < NQ; i++) QB[i] = rp.q[i];
+    }
+    if (mv.bsPose) {
+      const o3 = H2W(AC.F, AC.R, mv.bsPose.at), tg = [pc[0] + o3[0], pc[1] + o3[1] * Math.min(1.2, bsAmp), pc[2] + o3[2]];
+      const Zb = norm(H2W(AC.F, AC.R, mv.bsPose.face)), hb = norm(H2W(AC.F, AC.R, mv.bsPose.head));
+      let q = QB.slice();
+      for (let it = 0; it < 4; it++) {
+        q = reach(q, g, tg, 3, { idx: ARM3, map: atSwing0 });
+        const qs = atSwing0(q);
+        if (!fkCore(qs, g, Zb)) break;
+        q[12] = qs[12];
+        q[13] = qs[13];
+        let bw = q[14], bd = -2;
+        for (let w = g.wd[0]; w <= g.wd[1] + 1e-9; w += 6 * DEG) {
+          qs[14] = w;
+          const d = dot(fkCore(qs, g).l, hb);
+          if (d > bd) {
+            bd = d;
+            bw = w;
+          }
+        }
+        q[14] = bw;
+        clampQ(q, g);
+      }
+      for (const i of [12, 13, 14]) T1[i] = T1max * 0.8;
+      const rp = repair(legFix(q), 2, tg, 110, swingPen, { arm: true, map: atSwing0 });
+      for (let i = 0; i < NQ; i++) QB[i] = rp.q[i];
+    }
+    let Tf = 0;
+    const QFd = QF.slice(), T2d = T2.slice();
+    for (const scale of [1, 0.65, 0.4]) {
+      const D = Df * scale, Tm = clamp2(2 * D / Math.max(V, 0.8), 0.07, 0.3);
+      const tg = avoid([AC.Bc[0] + vd[0] * D, AC.Bc[1] + vd[1] * D, AC.Bc[2] + vd[2] * D], 0);
+      const seed2 = QFd.slice();
+      for (const i of [0, 1, 2, 4, 7, 8, 9, 10, 11]) seed2[i] = qC[i] + uC[i] * Tm * 0.5;
+      const rp = repair(legFix(reach(clampQ(seed2, g), g, tg, 7)), false, tg);
+      for (let i = 0; i < NQ; i++) {
+        QF[i] = rp.q[i];
+        T2[i] = Math.min(T2d[i], Tm * (0.6 + 0.4 * LATE[i]));
+      }
+      T2max = Tm;
+      let bad = rp.hard;
+      for (const f of [0.3, 0.6]) {
+        const q = new Array(NQ);
+        for (let i = 0; i < NQ; i++) {
+          const tt = f * Tm;
+          q[i] = tt < T2[i] ? hermite1(qC[i], uC[i], QF[i], 0, T2[i], tt / T2[i]) : QF[i];
+        }
+        bad += posePen(legFix(clampQ(q, g)), false, null).hard;
+      }
+      if (bad < 2e-5) break;
+    }
+    if (o.fake) {
+      const amp = pl.fakeAmp || 1;
+      let D;
+      if (o.fake === "lift") D = [dh[0] * 0.1, 0.24 * amp, dh[2] * 0.1];
+      else if (o.fake === "chop") {
+        const room = clamp2(AC.Bc[1] - P.tableY - 0.13, 0, 0.14 * amp);
+        D = [dh[0] * 0.15, -room, dh[2] * 0.15];
+      } else {
+        const toC = norm(sub(lerp(AC.C, AC.M, 0.3), AC.Bc));
+        D = [toC[0] * 0.16, 0.05 + toC[1] * 0.1, toC[2] * 0.16];
+      }
+      Tf = clamp2(0.17 * (pl.fakeT || 1) * (0.85 + 0.15 * amp), 0.13, 0.26);
+      const tg = avoid([AC.Bc[0] + D[0], AC.Bc[1] + D[1], AC.Bc[2] + D[2]], 0);
+      if (o.fake === "chop") tg[1] = Math.max(tg[1], P.tableY + 0.11);
+      const seed2 = qC.map((x, i) => x + uC[i] * Tf * 0.18);
+      const rp = repair(legFix(reach(clampQ(seed2, g), g, tg, 7)), false, tg);
+      for (let i = 0; i < NQ; i++) {
+        QF[i] = rp.q[i];
+        T2[i] = Tf;
+      }
+      if (o.fake !== "tuck") QF[12] = clamp2(QF[12] + (o.fake === "lift" ? 1 : -1) * face * 22 * DEG, g.pro[0], g.pro[1]);
+    }
+    const QE = QF.slice();
+    {
+      const NEU = { 8: 28 * DEG, 9: 14 * DEG, 10: 8 * DEG, 11: 98 * DEG, 12: 25 * DEG, 13: 0, 14: -4 * DEG };
+      for (const w of [0.6, 0.3, 0.08]) {
+        for (let i = 0; i < NQ; i++) QE[i] = QF[i];
+        QE[3] = qC[3];
+        QE[4] = Math.min(qC[4], 30 * DEG);
+        QE[5] = 8 * DEG;
+        QE[6] = 0;
+        QE[7] = mv.stance === "side" ? 24 * DEG : 0;
+        QE[1] = qC[1] + 0.05;
+        QE[0] = qC[0];
+        QE[2] = qC[2];
+        for (const i of [8, 9, 10, 11, 12, 13, 14]) QE[i] = QF[i] + (NEU[i] - QF[i]) * w;
+        const rp = repair(outOfTable(clampQ(QE, g)), false, null, 30);
+        for (let i = 0; i < NQ; i++) QE[i] = rp.q[i];
+        let bad = rp.hard;
+        for (const f of [0.3, 0.55, 0.8]) {
+          const q = QF.map((x, i) => x + (QE[i] - x) * smooth(f));
+          bad += posePen(legFix(clampQ(q, g)), false, null).hard;
+        }
+        if (bad < 2e-5) break;
+      }
+    }
+    const T2end = Math.max(...T2);
+    const te0 = T2end + (pl.hold || 0.1), De = 0.5;
+    const track = (t) => {
+      if (t <= 0) return preAt(QB, t);
+      const q = new Array(NQ);
+      for (let i = 0; i < NQ; i++) {
+        if (t < T2[i]) q[i] = hermite1(qC[i], uC[i], QF[i], 0, T2[i], t / T2[i]);
+        else if (t < te0) q[i] = QF[i];
+        else q[i] = QF[i] + (QE[i] - QF[i]) * smooth((t - te0) / De);
+      }
+      return legFix(clampQ(q, g));
+    };
+    const coreAt = (t) => {
+      const q = track(t), A = fkCore(q, g);
+      const bp = ballAt(Math.min(t, 0.03));
+      const aim = t < 0.03 ? bp : lerp(bp, recv, smooth((t - 0.03) / 0.32));
+      const hd = headOf(A, aim), hp = hipsOf(A.P, A.R);
+      return { t, q, A, hd, hp, KL: ik2(hp.HL, ft.AL, ft.poleL, DIM.thigh, DIM.shin).E, KR: ik2(hp.HR, ft.AR, ft.poleR, DIM.thigh, DIM.shin).E };
+    };
+    const freeT = clamp2(-tRel - T1max * 0.5 - 0.1, 0.2, pl.freeT || 0.42), freeDelay = Math.min(pl.freeDelay || 0.1, Math.max(0.03, -tRel - T1max - freeT));
+    let eDir = null, eT0 = 0;
+    const eDt = 8e-3;
+    const armB = norm(H2W(AC.F, AC.R, ARM_B)), armE = (() => {
+      const e = H2W(AC.F, AC.R, ARM_E), d = dot(e, armB);
+      return norm([e[0] - armB[0] * d, e[1] - armB[1] * d, e[2] - armB[2] * d]);
+    })();
+    const poleOf = (dn, sw) => {
+      const c = dot(armB, dn), ax = cross(armB, dn);
+      let e = armE;
+      if (c > -0.995) {
+        const k = dot(ax, armE) / (1 + c), x = cross(ax, armE);
+        e = [armE[0] * c + x[0] + ax[0] * k, armE[1] * c + x[1] + ax[1] * k, armE[2] * c + x[2] + ax[2] * k];
+      }
+      if (sw) {
+        const x = cross(dn, e), cs = Math.cos(sw), sn = Math.sin(sw);
+        e = [e[0] * cs + x[0] * sn, e[1] * cs + x[1] * sn, e[2] * cs + x[2] * sn];
+      }
+      return e;
+    };
+    const freeArm = (core, plan2, useSmooth) => {
+      const { A, t } = core, F = A.F, R = A.R;
+      const tau = t - tRel;
+      const dirH = (() => {
+        const v = [palmLo[0] - A.SL[0], 0, palmLo[2] - A.SL[2]];
+        const l = Math.hypot(v[0], v[2]);
+        return l > 0.05 ? [v[0] / l, 0, v[2] / l] : F;
+      })();
+      const wristOf = (palm) => [palm[0] - dirH[0] * 0.05, palm[1] - 0.014, palm[2] - dirH[2] * 0.05];
+      let Wf, relax = 0, d = dirH, p = [0, 1, 0];
+      if (tau <= 0) {
+        const b = ballAt(t);
+        Wf = wristOf([b[0], b[1] - P.R - 0.012, b[2]]);
+      } else {
+        const up = followUp * (1 - Math.exp(-tau / 0.09));
+        const A0 = wristOf([palmHi[0], palmHi[1] + up, palmHi[2]]);
+        const ue = smooth((t - te0) / De);
+        const ro = H2W(F, R, plan2.rest.at), rb = plan2.rest.rel === "pel" ? A.P : A.SL, ge = H2W(F, R, [0.2, -0.33, -0.12]);
+        const r0 = [rb[0] + ro[0], rb[1] + ro[1], rb[2] + ro[2]], r1 = [A.SL[0] + ge[0], A.SL[1] + ge[1], A.SL[2] + ge[2]];
+        let rs = r0;
+        if (ue > 0) {
+          const lo = H2W(F, R, [-0.08, -0.6, -0.17]), cm = [A.SL[0] + lo[0], Math.min(A.SL[1] + lo[1], r0[1], r1[1]), A.SL[2] + lo[2]], w1 = 1 - ue;
+          rs = [w1 * w1 * r0[0] + 2 * ue * w1 * cm[0] + ue * ue * r1[0], w1 * w1 * r0[1] + 2 * ue * w1 * cm[1] + ue * ue * r1[1], w1 * w1 * r0[2] + 2 * ue * w1 * cm[2] + ue * ue * r1[2]];
+        }
+        const u = smooth((tau - freeDelay) / freeT), w = 1 - u;
+        let ct = lerp(A0, rs, 0.5);
+        if (plan2.via) {
+          const vo = H2W(F, R, plan2.via);
+          ct = [2 * (A.SL[0] + vo[0]) - ct[0], 2 * (A.SL[1] + vo[1]) - ct[1], 2 * (A.SL[2] + vo[2]) - ct[2]];
+        }
+        Wf = [w * w * A0[0] + 2 * u * w * ct[0] + u * u * rs[0], w * w * A0[1] + 2 * u * w * ct[1] + u * u * rs[1], w * w * A0[2] + 2 * u * w * ct[2] + u * u * rs[2]];
+        Wf[1] += tableLiftSoft(Wf, 0.055);
+        relax = smooth(tau / 0.3);
+      }
+      const u2 = tau <= 0 ? 0 : smooth((tau - freeDelay) / freeT);
+      let pole = poleOf(norm(sub(Wf, A.SL)), plan2.sw * (1 - u2) + plan2.swR * u2);
+      if (useSmooth && eDir) {
+        const x = clamp2((t - eT0) / eDt, 0, eDir.length - 1.001), k = Math.floor(x);
+        pole = lerp(eDir[k], eDir[k + 1], x - k);
+      }
+      let kf = ik2(A.SL, Wf, pole, DIM.upper, DIM.fore);
+      {
+        let px = 0, py = 0, pz = 0, dep = 0;
+        for (const [a, b, rr] of [[A.P, A.M, DIM.rLo + 0.046], [A.M, A.C, DIM.rHi + 0.04]]) {
+          const cp = closestOnSeg(kf.E, a, b), ex = kf.E[0] - cp[0], ey = kf.E[1] - cp[1], ez = kf.E[2] - cp[2], d2 = Math.hypot(ex, ey, ez);
+          if (d2 < rr && d2 > 1e-6) {
+            const w = (rr - d2) / d2;
+            px += ex * w;
+            py += ey * w;
+            pz += ez * w;
+            dep += rr - d2;
+          }
+        }
+        if (dep > 0) {
+          px -= A.Rc[0] * dep * 0.7;
+          py -= A.Rc[1] * dep * 0.7;
+          pz -= A.Rc[2] * dep * 0.7;
+          const dn = norm(sub(Wf, kf.S)), ev = sub(kf.E, kf.S), dd = dot(ev, dn), e = norm([ev[0] - dn[0] * dd, ev[1] - dn[1] * dd, ev[2] - dn[2] * dd]), tg = cross(dn, e);
+          const del = 0.75 * Math.tanh((px * tg[0] + py * tg[1] + pz * tg[2]) * 12), cs = Math.cos(del), sn = Math.sin(del);
+          pole = [e[0] * cs + tg[0] * sn, e[1] * cs + tg[1] * sn, e[2] * cs + tg[2] * sn];
+          kf = ik2(A.SL, Wf, pole, DIM.upper, DIM.fore);
+        }
+      }
+      for (let k = 0, add2 = 0; k < 3; k++) {
+        const d2 = tableLiftSoft(kf.E, 0.05);
+        if (d2 < 2e-4) break;
+        add2 += d2 * 10;
+        kf = ik2(A.SL, Wf, [pole[0], pole[1] + add2, pole[2]], DIM.upper, DIM.fore);
+      }
+      if (relax > 0) {
+        const fd = norm(sub(Wf, kf.E));
+        let pr = [R[0] * 0.55, -0.65, R[2] * 0.55];
+        pr = sub(pr, [fd[0] * dot(pr, fd), fd[1] * dot(pr, fd), fd[2] * dot(pr, fd)]);
+        pr = len(pr) > 1e-3 ? norm(pr) : [0, -1, 0];
+        d = norm(lerp(dirH, fd, relax));
+        let pm = lerp([0, 1, 0], pr, relax);
+        pm = sub(pm, [d[0] * dot(pm, d), d[1] * dot(pm, d), d[2] * dot(pm, d)]);
+        p = len(pm) > 1e-3 ? norm(pm) : pr;
+      }
+      return { S: kf.S, E: kf.E, W: Wf, d, p, r: cross(p, d), relax, tau };
+    };
+    const SWIVEL = [[0, 0], [0.5, 0], [-0.45, 0], [0, 0.5], [0, -0.5], [0.5, 0.5]];
+    const VIAS = [null, [0.12, -0.16, -0.3], [-0.04, -0.06, -0.37], [0.06, 0.08, -0.34], [0.22, -0.26, -0.2]];
+    const restOrder = (() => {
+      const first = pl.rest && pl.rest[mv.stance] || (mv.stance === "side" ? "wing" : "low");
+      return [first, ...Object.keys(REST).filter((k) => k !== first)];
+    })();
+    const samp = [];
+    {
+      const tA = Math.min(tb0, tRel) - 0.12;
+      for (let t = tA; t < te0 + De; t += 0.03) samp.push(coreAt(t));
+      samp.push(coreAt(te0 + De));
+      for (const t of [0.015, 0.045, 0.075, 0.105, 0.135, 0.165]) {
+        const c = coreAt(t);
+        c.ballOnly = true;
+        samp.push(c);
+      }
+    }
+    const planPen = (plan2) => {
+      let pen = 0;
+      for (const c of samp) {
+        const fa = freeArm(c, plan2), A = c.A, t = c.t;
+        const hf = addmul(fa.W, fa.d, 0.05), ff = lerp(fa.E, fa.W, 0.5), hnd = addmul(A.W, A.dd, 0.05);
+        if (c.ballOnly) {
+          const b = ballAt(t);
+          pen += sq(Math.max(0, P.R + 0.065 - len(sub(b, hf)))) + sq(Math.max(0, P.R + DIM.rFore + 0.025 - distSeg(b, fa.E, fa.W))) + sq(Math.max(0, P.R + DIM.rUpper + 0.025 - distSeg(b, fa.S, fa.E)));
+          continue;
+        }
+        const pts = [[hf, 0.042, 1], [ff, 0.038, 0], [fa.E, 0.044, 0]];
+        for (const [pt, rr, isHand] of pts) {
+          const rl = sub(pt, A.Bc), dn = dot(rl, A.Zf), rho = len(sub(rl, [A.Zf[0] * dn, A.Zf[1] * dn, A.Zf[2] * dn]));
+          if (rho < DIM.blade + rr) pen += sq(Math.max(0, rr + 0.02 - Math.abs(dn)));
+          pen += sq(Math.max(0, rr + 0.05 - distSeg(pt, A.E, A.W))) + sq(Math.max(0, rr + 0.055 - len(sub(pt, hnd))));
+          if (!isHand || fa.tau > 0.05) pen += sq(Math.max(0, DIM.rLo + rr - distSeg(pt, A.P, A.M))) + sq(Math.max(0, DIM.rHi + rr - 0.01 - distSeg(pt, A.M, A.C))) + sq(Math.max(0, DIM.headR + rr - len(sub(pt, c.hd.head))));
+          pen += sq(Math.max(0, DIM.rThigh + rr - 0.01 - distSeg(pt, c.hp.HL, c.KL)));
+          if (!isHand || fa.tau > 0.02) pen += sq(tablePen(pt, rr + 8e-3));
+          if (fa.tau > 0.25) pen += 0.25 * sq(tablePen([pt[0], pt[1] - 0.22, pt[2]], rr));
+          if (fa.tau > 0.07 && t < 0.2) pen += sq(Math.max(0, P.R + rr + 0.02 - len(sub(pt, ballAt(t)))));
+        }
+        if (fa.tau > 0.07 && t < 0.2) pen += sq(Math.max(0, P.R + DIM.rUpper + 0.02 - distSeg(ballAt(t), fa.S, fa.E)));
+        if (fa.tau > 0.1 && t < 0.012) {
+          const b = ballAt(t);
+          for (const [pt, rr] of [[hf, 0.045], [ff, 0.04], [fa.E, 0.046], [lerp(fa.S, fa.E, 0.5), DIM.rUpper + 4e-3]]) pen += sq(Math.max(0, hideDepth(b, pt, rr) + P.R + 0.01));
+        }
+        pen += sq(Math.max(0, 0.2 - len(sub(fa.W, fa.S))));
+      }
+      return pen;
+    };
+    let plan = null, planBest = 1e9;
+    search: for (let ri = 0; ri < restOrder.length; ri++) for (let hi = 0; hi < SWIVEL.length; hi++) for (let ci = 0; ci < VIAS.length; ci++) {
+      const pln = { rest: REST[restOrder[ri]], restKey: restOrder[ri], sw: SWIVEL[hi][0], swR: SWIVEL[hi][1], via: VIAS[ci] };
+      const pn = planPen(pln) + 2e-5 * ri + 1e-5 * ci + 1e-5 * hi;
+      if (pn < planBest) {
+        planBest = pn;
+        plan = pln;
+      }
+      if (pn < 1e-4) break search;
+    }
+    {
+      eT0 = Math.min(tb0, tRel, o.tPalm0 === void 0 ? tRel : o.tPalm0) - 0.2;
+      const N2 = Math.ceil((te0 + De + 0.1 - eT0) / eDt) + 2, dir = new Array(N2), axis = new Array(N2);
+      for (let k = 0; k < N2; k++) {
+        const fa = freeArm(coreAt(eT0 + k * eDt), plan), dn = norm(sub(fa.W, fa.S)), v = sub(fa.E, fa.S), d = dot(v, dn);
+        const pp = [v[0] - dn[0] * d, v[1] - dn[1] * d, v[2] - dn[2] * d], l = len(pp);
+        dir[k] = l > 1e-6 ? [pp[0] / l, pp[1] / l, pp[2] / l] : [0, -1, 0];
+        axis[k] = dn;
+      }
+      for (let pass = 0; pass < 24; pass++) {
+        let a = dir[0];
+        for (let k = 1; k < N2 - 1; k++) {
+          const b = dir[k], c2 = dir[k + 1], dn = axis[k];
+          let v = [a[0] + 2 * b[0] + c2[0], a[1] + 2 * b[1] + c2[1], a[2] + 2 * b[2] + c2[2]];
+          const d = dot(v, dn);
+          v = [v[0] - dn[0] * d, v[1] - dn[1] * d, v[2] - dn[2] * d];
+          const l = len(v);
+          a = b;
+          if (l > 1e-3) dir[k] = [v[0] / l, v[1] / l, v[2] / l];
+        }
+      }
+      eDir = dir;
+    }
+    const at = (t, full) => {
+      const c = coreAt(t), A = c.A, F = A.F, R = A.R, fa = freeArm(c, plan, true);
+      const J = {
+        pelvis: A.P,
+        mid: A.M,
+        chest: A.C,
+        neck: c.hd.neck,
+        head: c.hd.head,
+        look: c.hd.look,
+        F,
+        R,
+        Uc: A.Uc,
+        Fc: A.Fc,
+        Rc: A.Rc,
+        sd1: A.sd1,
+        shP: A.SR,
+        elP: A.E,
+        wrP: A.W,
+        shF: fa.S,
+        elF: fa.E,
+        wrF: fa.W,
+        hipP: c.hp.HR,
+        hipF: c.hp.HL,
+        knP: c.KR,
+        knF: c.KL,
+        anP: ft.AR,
+        anF: ft.AL,
+        toeP: ft.toeR,
+        toeF: ft.toeL,
+        handP: { d: A.dd, p: A.pp, r: A.rr },
+        handF: { d: fa.d, p: fa.p, r: fa.r },
+        racket: { c: A.Bc, l: A.l, Z: A.Zf, n: [A.Zf[0] * face, A.Zf[1] * face, A.Zf[2] * face], K: bladePoint(A, off, face) },
+        q: c.q
+      };
+      if (full) {
+        J.fingP = handPoints(A.W, A.dd, A.pp, A.rr, g.key, null, 0, g.key === "serve" ? pinchOf(A) : null);
+        J.fingF = handPoints(fa.W, fa.d, fa.p, fa.r, "flat", "relax", fa.relax);
+      }
+      if (mir) {
+        for (const k of ["pelvis", "mid", "chest", "neck", "head", "look", "F", "R", "Uc", "Fc", "Rc", "sd1", "shP", "elP", "wrP", "shF", "elF", "wrF", "hipP", "hipF", "knP", "knF", "anP", "anF", "toeP", "toeF"]) J[k] = mirror(J[k]);
+        for (const hk of ["handP", "handF"]) J[hk] = { d: mirror(J[hk].d), p: mirror(J[hk].p), r: mirror(J[hk].r) };
+        const rk = J.racket;
+        J.racket = { c: mirror(rk.c), l: mirror(rk.l), Z: mirror(rk.Z), n: mirror(rk.n), K: mirror(rk.K) };
+        if (full) {
+          J.fingP = J.fingP.map((f) => f.map(mirror));
+          J.fingF = J.fingF.map((f) => f.map(mirror));
+        }
+      }
+      J.racket.q = qFromBasis(cross(J.racket.l, J.racket.Z), J.racket.l, J.racket.Z);
+      return J;
+    };
+    const tReady = Math.min(tb0, o.tPalm0 === void 0 ? tb0 : o.tPalm0);
+    const tDone = te0 + De;
+    const out = {
+      ok: true,
+      at,
+      tReady,
+      tDone,
+      tSwing0: -T1max,
+      tSwingEnd: T2end,
+      T1max,
+      grip: g.key,
+      restKey: plan.restKey,
+      planPen: planBest,
+      racketAt: (t) => {
+        const r = at(t).racket;
+        return { c: r.c, q: r.q };
+      },
+      contactAt: (t) => at(t).racket.K,
+      pose: { cost: best.cost, effort: best.effort, worst: best.worst, q: qC.slice(), u: uC.slice() }
+    };
+    out.stats = validate(out, o);
+    return out;
+  }
+  function validate(m, o) {
+    const st = { body: 0, table: 0, ballBody: 0, early: 0, late: 0, free: 0, leg: 0, nan: 0, hide: -1, hideT: 0, where: {} };
+    const up = (k, v, t, tag) => {
+      if (v > st[k]) {
+        st[k] = v;
+        st.where[k] = tag + "@" + t.toFixed(2);
+      }
     };
     const ts = [];
-    const t0 = o.tReady - 0.02, t1 = o.tDone + 0.03;
-    for (let i = 0; i <= 26; i++) ts.push(t0 + (t1 - t0) * i / 26);
-    for (const t of [-0.04, -0.02, 0, 0.02, 0.04]) ts.push(t);
-    const RK = ts.map(rk);
-    const W0 = rk(0).W;
-    const build = (dF, dl, th) => {
-      const off = (side ? 0.1 : 0.02) + dl;
-      const py = BODY.pelvisY + 0.03 - 0.09 * Math.max(0, Math.min(1, (th / DEG - 32) / 21));
-      const Pv = [pc[0] - F[0] * dF + pl[0] * off, py, pc[2] - F[2] * dF + pl[2] * off];
-      const sd = [F[0] * Math.sin(th), Math.cos(th), F[2] * Math.sin(th)];
-      const C = addmul(Pv, sd, BODY.spine);
-      return { P: Pv, sd, C, Sp: addmul(C, pl, BODY.shHalf), Sf: addmul(C, fl, BODY.shHalf), th, dF, dl };
-    };
-    const shoulderAt = (L2, W) => {
-      const d = sub(W, W0), dl = len(d);
-      const k = dl > 0.3 ? 0.3 / dl : 1;
-      return addmul(L2.Sp, d, 0.22 * k);
-    };
-    const headAt = (L2, C) => add(addmul(C, L2.sd, 0.175), [0, 0.035, 0]);
-    const evalCand = (L2, pole2) => {
-      let clip = 0, reach = 0, maxPen = 0;
-      const pen = (p, r, a, b, rr) => {
-        const cp = closestOnSeg(p, a, b);
-        const d = len(sub(p, cp));
-        const need = r + rr + 0.012;
-        if (d < need) {
-          clip += (need - d) ** 2;
-          if (need - d - 0.012 > maxPen) maxPen = need - d - 0.012;
+    const t0 = Math.min(m.tReady, o.tRel) - 0.05, t1 = Math.min(m.tDone, 0.9);
+    for (let t = t0; t < -0.42; t += 0.04) ts.push(t);
+    for (let t = Math.max(t0, -0.42); t < 0.3; t += 0.012) ts.push(t);
+    for (let t = 0.3; t <= t1; t += 0.04) ts.push(t);
+    ts.push(0);
+    const R = P.R;
+    ts.sort((a, b) => a - b);
+    for (let ti = 0; ti < ts.length; ti++) {
+      const t = ts[ti];
+      const J = m.at(t);
+      for (const k of ["pelvis", "chest", "head", "elP", "wrP", "elF", "wrF", "knP", "knF"]) if (!J[k].every(Number.isFinite)) st.nan++;
+      const rk = J.racket;
+      const caps = [["torso", J.pelvis, J.mid, DIM.rLo], ["chest", J.mid, J.chest, DIM.rHi], ["head", J.head, J.head, DIM.headR], ["thighP", J.hipP, J.knP, DIM.rThigh], ["thighF", J.hipF, J.knF, DIM.rThigh], ["shinP", J.knP, J.anP, DIM.rShin], ["shinF", J.knF, J.anF, DIM.rShin]];
+      const hnd = addmul(J.wrP, J.handP.d, 0.05), fm = lerp(J.elP, J.wrP, 0.55);
+      for (const [nm, a, b2, rr] of caps) {
+        up("body", discPen(rk.c, rk.Z, a, b2, rr), t, "racket-" + nm);
+        up("body", spherePen(hnd, 0.042, a, b2, rr), t, "hand-" + nm);
+        up("body", spherePen(fm, DIM.rFore, a, b2, rr), t, "forearm-" + nm);
+      }
+      up("body", spherePen(J.elP, 0.044, J.pelvis, J.mid, DIM.rLo), t, "elbow-torso");
+      up("body", spherePen(J.elP, 0.044, J.head, J.head, DIM.headR), t, "elbow-head");
+      {
+        const nz = rk.Z, drop = DIM.blade * Math.sqrt(Math.max(0, 1 - nz[1] * nz[1]));
+        up("table", tablePen([rk.c[0], rk.c[1] - drop + 0.012, rk.c[2]], 0.012), t, "racket");
+        up("table", tablePen(hnd, 0.04), t, "hand");
+        up("table", tablePen(J.elP, 0.042), t, "elbow");
+        up("table", tablePen(J.wrP, 0.036), t, "wrist");
+        up("table", tablePen(J.elF, 0.042), t, "freeElbow");
+        up("table", tablePen(J.knP, 0.06), t, "knee");
+        up("table", tablePen(J.knF, 0.06), t, "kneeF");
+        up("table", tablePen(J.pelvis, 0.14), t, "pelvis");
+        if (t > o.tRel + 0.02) up("table", tablePen(J.wrF, 0.036), t, "freeWrist");
+      }
+      {
+        const hf = addmul(J.wrF, J.handF.d, 0.05), ff = lerp(J.elF, J.wrF, 0.5);
+        for (const [nm, pt, rr] of [["hand", hf, 0.04], ["forearm", ff, 0.036], ["elbow", J.elF, 0.042]]) {
+          const rl = sub(pt, rk.c), dn = dot(rl, rk.Z), rho = len(sub(rl, [rk.Z[0] * dn, rk.Z[1] * dn, rk.Z[2] * dn]));
+          if (rho < DIM.blade + rr * 0.5) up("free", rr + 6e-3 - Math.abs(dn), t, nm + "-blade");
+          up("free", rr + 0.036 - distSeg(pt, J.elP, J.wrP), t, nm + "-forearm");
+          up("free", rr + 0.04 - len(sub(pt, hnd)), t, nm + "-hand");
         }
-      };
-      for (let i = 0; i < RK.length; i++) {
-        const r = RK[i];
-        const Sp = shoulderAt(L2, r.W);
-        const k = ik2(Sp, r.W, pole2, BODY.upper, BODY.fore);
-        const C = lerp(k.S, L2.Sf, 0.5);
-        const hd = headAt(L2, C);
-        const d = len(sub(r.W, Sp));
-        if (d > 0.53) reach += (d - 0.53) ** 2;
-        if (d < 0.2) reach += (0.2 - d) ** 2;
-        for (const [pt, rr] of [[k.E, 0.045], [lerp(k.E, r.W, 0.5), 0.04]]) {
-          const dip = P.tableY + 6e-3 - (pt[1] - rr);
-          if (dip > 0 && Math.abs(pt[0]) < P.tableW / 2 + rr && pt[2] > -P.tableL / 2 - rr) {
-            clip += dip * dip;
-            if (dip - 6e-3 > maxPen) maxPen = dip - 6e-3;
+        if (t > o.tRel + 0.05) {
+          up("free", DIM.rLo + 0.035 - distSeg(hf, J.pelvis, J.mid), t, "hand-torso");
+          up("free", DIM.rHi + 0.03 - distSeg(hf, J.mid, J.chest), t, "hand-chest");
+          up("free", DIM.headR + 0.04 - len(sub(hf, J.head)), t, "hand-head");
+        }
+        up("free", DIM.rLo + 0.03 - distSeg(J.elF, J.pelvis, J.mid), t, "elbow-torso");
+      }
+      up("leg", Math.max(len(sub(J.hipP, J.anP)), len(sub(J.hipF, J.anF))) - (DIM.thigh + DIM.shin), t, "leg");
+      const b = o.ballAt(t).p;
+      if (t > o.tRel + 0.03) {
+        up("ballBody", DIM.headR + R - len(sub(b, J.head)), t, "head");
+        up("ballBody", DIM.rLo + R - distSeg(b, J.pelvis, J.mid), t, "torso");
+        up("ballBody", DIM.rHi + R - distSeg(b, J.mid, J.chest), t, "chest");
+        up("ballBody", DIM.rUpper + R - distSeg(b, J.shP, J.elP), t, "upperP");
+        up("ballBody", DIM.rUpper + R - distSeg(b, J.shF, J.elF), t, "upperF");
+        up("ballBody", DIM.rFore + R - distSeg(b, J.elF, J.wrF), t, "foreF");
+        if (Math.abs(t) > 0.012) up("ballBody", DIM.rFore + R - distSeg(b, J.elP, J.wrP), t, "foreP");
+        if (t > o.tRel + 0.08) up("ballBody", 0.04 + R - len(sub(b, addmul(J.wrF, J.handF.d, 0.05))), t, "handF");
+        if (Math.abs(t) > 0.012) up("ballBody", 0.038 + R - len(sub(b, hnd)), t, "handP");
+        up("ballBody", DIM.rThigh + R - distSeg(b, J.hipP, J.knP), t, "thigh");
+        up("ballBody", DIM.rThigh + R - distSeg(b, J.hipF, J.knF), t, "thighF");
+      }
+      if (t > o.tRel + 0.05 && t <= 0.012) {
+        const hf = addmul(J.wrF, J.handF.d, 0.05);
+        let worst = -1, tag = "";
+        for (const [nm, c, r] of [
+          ["head", J.head, DIM.headR],
+          ["chest", J.chest, DIM.rHi],
+          ["chest", lerp(J.mid, J.chest, 0.5), DIM.rHi],
+          ["torso", J.mid, DIM.rLo],
+          ["torso", lerp(J.pelvis, J.mid, 0.5), DIM.rLo],
+          ["shF", J.shF, 0.06],
+          ["shP", J.shP, 0.06],
+          ["upperF", lerp(J.shF, J.elF, 0.5), DIM.rUpper],
+          ["elF", J.elF, 0.042],
+          ["foreF", lerp(J.elF, J.wrF, 0.5), DIM.rFore],
+          ["handF", hf, 0.04],
+          ["upperP", lerp(J.shP, J.elP, 0.5), DIM.rUpper],
+          ["elP", J.elP, 0.042],
+          ["foreP", lerp(J.elP, J.wrP, 0.5), DIM.rFore]
+        ]) {
+          const d = hideDepth(b, c, r);
+          if (d > worst) {
+            worst = d;
+            tag = nm;
           }
         }
-        for (const ob of [[L2.P, C, BODY.rTorso], [hd, hd, BODY.rHead]]) {
-          const cp = closestOnSeg(r.c, ob[0], ob[1]);
-          const u = norm(sub(r.c, cp));
-          const eff = 0.076 * Math.sqrt(Math.max(0, 1 - dot(u, r.n) ** 2)) + 6e-3;
-          pen(r.c, eff, ob[0], ob[1], ob[2]);
-          pen(addmul(r.W, r.l, 0.045), 0.045, ob[0], ob[1], ob[2]);
-          pen(k.E, 0.045, ob[0], ob[1], ob[2]);
-          pen(lerp(k.E, r.W, 0.5), 0.04, ob[0], ob[1], ob[2]);
+        if (worst > 0) {
+          st.hideT += ti > 0 ? Math.min(0.04, t - ts[ti - 1]) : 0.012;
+          if (!st.where.hideT) st.where.hideT = tag + "@" + t.toFixed(2);
         }
+        if (t > -0.1) up("hide", worst, t, tag);
       }
-      return { clip, reach, maxPen };
-    };
-    const palmLo = o.palmAt(-1e9).p, palmHi = o.palmAt(1e9).p;
-    const tossY = o.tossY || [palmLo[1], palmHi[1]];
-    const tossEval = (L2) => {
-      let clip = 0, maxPen = 0, reach = 0;
-      const hd = headAt(L2, L2.C);
-      const yn = Math.max(tossY[0], Math.min(tossY[1], hd[1]));
-      const dH = Math.hypot(hd[0] - pc[0], hd[1] - yn, hd[2] - pc[2]), needH = BODY.rHead + P.R + 0.05;
-      if (dH < needH) {
-        clip += (needH - dH) ** 2;
-        maxPen = Math.max(maxPen, needH - 0.05 - dH);
-      }
-      const needT = BODY.rTorso + P.R + 0.03;
-      for (let y = tossY[0]; y <= tossY[1] + 1e-9; y += 0.04) {
-        const q = [pc[0], y, pc[2]];
-        const d = len(sub(q, closestOnSeg(q, L2.P, L2.C)));
-        if (d < needT) {
-          clip += 0.3 * (needT - d) ** 2;
-          maxPen = Math.max(maxPen, needT - 0.03 - d);
-        }
-      }
-      for (const pm of [palmLo, palmHi]) {
-        const d = len(sub(pm, L2.Sf));
-        if (d > 0.6) reach += (d - 0.6) ** 2;
-        if (d < 0.16) reach += (0.16 - d) ** 2;
-      }
-      return { clip, maxPen, reach };
-    };
-    const pole0 = norm([T.elbow[0] * hand, T.elbow[1], T.elbow[2]]);
-    const dFs = side ? [0.38, 0.45, 0.52, 0.59, 0.66, 0.73] : [0.36, 0.42, 0.48, 0.54, 0.6, 0.66];
-    const dF0 = side ? 0.55 : 0.48, th0 = (side ? 40 : 34) * DEG;
-    const cands = [];
-    for (const dF of dFs) for (const dl of side ? [-0.2, -0.1, -0.05, 0, 0.05, 0.1] : [-0.1, -0.05, 0, 0.05, 0.1]) for (const thd of [32, 39, 46, 53]) {
-      const L2 = build(dF, dl, thd * DEG);
-      const e = evalCand(L2, pole0);
-      const te = tossEval(L2);
-      L2.toss = te;
-      let cost = 400 * e.clip + 300 * e.reach + 400 * te.clip + 300 * te.reach + 1.5 * (dF - dF0) ** 2 + 1.5 * dl * dl + 2.5 * (L2.th - th0) ** 2;
-      if (Math.abs(L2.P[0]) < P.tableW / 2 + 0.16 && L2.P[2] > -P.tableL / 2 - 0.2) cost += 60 * (L2.P[2] + P.tableL / 2 + 0.2) ** 2 + 0.5;
-      cands.push({ L: L2, cost, e });
-    }
-    cands.sort((a, b) => a.cost - b.cost);
-    const poles = [pole0, norm(rotY(pole0, 0.6)), norm(rotY(pole0, -0.6)), norm(add(pole0, [0, 0.6, 0])), norm(add(pole0, [0, -0.6, 0])), norm(rotY(pole0, 1.2)), norm(rotY(pole0, -1.2))];
-    let best = null;
-    for (let i = 0; i < Math.min(6, cands.length); i++) {
-      for (let j = 0; j < poles.length; j++) {
-        const e = j === 0 ? cands[i].e : evalCand(cands[i].L, poles[j]);
-        const cost = cands[i].cost - 400 * cands[i].e.clip - 300 * cands[i].e.reach + 400 * e.clip + 300 * e.reach + 0.03 * (1 - dot(poles[j], pole0));
-        if (!best || cost < best.cost) best = { L: cands[i].L, pole: poles[j], cost, e };
+      if (t > o.tRel + 0.03 && Math.abs(t) > 4e-3) {
+        const rl = sub(b, rk.c), dn = dot(rl, rk.Z), rho = len(sub(rl, [rk.Z[0] * dn, rk.Z[1] * dn, rk.Z[2] * dn]));
+        if (rho < DIM.blade) up(t < 0 ? "early" : "late", R + DIM.rubber - Math.abs(dn), t, "blade");
       }
     }
-    const L = best.L, pole = best.pole;
-    const hipF = addmul(L.P, fl, BODY.hipHalf), hipP = addmul(L.P, pl, BODY.hipHalf);
-    const anF = [L.P[0] + fl[0] * 0.27 + F[0] * 0.05, BODY.ankleY, L.P[2] + fl[2] * 0.27 + F[2] * 0.05];
-    const anP = [L.P[0] + pl[0] * 0.25 - F[0] * 0.02, BODY.ankleY, L.P[2] + pl[2] * 0.25 - F[2] * 0.02];
-    const knF = ik2(hipF, anF, add(F, mul(fl, 0.25)), BODY.thigh, BODY.shin).E;
-    const knP = ik2(hipP, anP, add(F, mul(pl, 0.25)), BODY.thigh, BODY.shin).E;
-    const freeAt = (plan2, palm) => {
-      if (palm.after <= 0) return palm.p;
-      const u = smooth(palm.after / 0.42), v = 1 - u;
-      const A = add(palm.p, [0, 0.05 * Math.sin(Math.PI * Math.min(1, palm.after / 0.22)), 0]);
-      const c = plan2.ctrl, r = plan2.rest;
-      return [v * v * A[0] + 2 * u * v * c[0] + u * u * r[0], v * v * A[1] + 2 * u * v * c[1] + u * u * r[1], v * v * A[2] + 2 * u * v * c[2] + u * u * r[2]];
-    };
-    const tsF = [];
-    {
-      const a = -o.palmAt(0).after;
-      for (const t of [-1e6, a - 0.12, a - 0.06, a]) tsF.push(t);
-      for (let i = 1; i <= 14; i++) tsF.push(a + 0.5 * i / 14);
-      for (let i = 0; i <= 12; i++) tsF.push(Math.min(-0.3, a + 0.5) + (o.tDone + 0.3) * i / 12);
-    }
-    const rel = (f, l, y) => add(add(addmul(L.Sf, F, f), mul(fl, l)), [0, y, 0]);
-    const rests = [
-      rel(-0.1, 0.04, -0.37),
-      // 松松地垂在肩膀下面
-      rel(-0.2, 0.1, -0.34),
-      // 往后、往外带一点
-      rel(0, 0.17, -0.35),
-      // 垂在外侧
-      rel(-0.3, 0.03, -0.26),
-      // 收到身后
-      rel(-0.12, 0.12, -0.22),
-      // 抬高一点收在腰侧
-      rel(0.08, 0.26, -0.28),
-      // 往外撇开
-      rel(-0.32, 0.14, -0.12)
-      // 肘往后拉，手收到肋边
-    ];
-    const polesF = [
-      norm(add(add(mul(F, -0.9), mul(fl, 0.25)), [0, -0.3, 0])),
-      // 肘朝后下
-      norm(add(add(mul(F, -0.5), mul(fl, 0.8)), [0, -0.1, 0])),
-      // 肘朝外
-      norm(add(add(mul(F, -0.7), mul(fl, 0.3)), [0, 0.5, 0])),
-      // 肘朝后上
-      norm(add(add(mul(F, -0.2), mul(fl, 0.6)), [0, 0.8, 0]))
-      // 肘朝外上（架起来）
-    ];
-    const evalPlan = (plan2) => {
-      let pen = 0, maxPen = 0;
-      const why = {};
-      let cat = "";
-      const hit = (d, need) => {
-        if (d < need) {
-          pen += (need - d) ** 2;
-          if (need - d > maxPen) maxPen = need - d;
-          if (!(need - d < (why[cat] || 0))) why[cat] = need - d;
-        }
-      };
-      for (const t of tsF) {
-        const palm = o.palmAt(t);
-        const Wf = freeAt(plan2, palm);
-        const kf = ik2(L.Sf, Wf, plan2.pole, BODY.upper, BODY.fore);
-        const r = rk(t);
-        const kp = ik2(shoulderAt(L, r.W), r.W, pole, BODY.upper, BODY.fore);
-        const mid = lerp(kf.E, Wf, 0.5);
-        for (const [pt, rr, isHand] of [[Wf, 0.045, 1], [mid, 0.04, 0], [kf.E, 0.042, 0]]) {
-          if (palm.after > 0 || !isHand) {
-            const rl = sub(pt, r.c), dn = dot(rl, r.n), rho = len(sub(rl, mul(r.n, dn)));
-            cat = "blade";
-            if (rho < 0.078 + rr) hit(Math.abs(dn), rr + 0.012);
-            cat = "grip";
-            hit(len(sub(pt, addmul(r.W, r.l, 0.035))), rr + 0.05);
-            cat = "forearm";
-            hit(len(sub(pt, closestOnSeg(pt, kp.E, r.W))), rr + 0.045);
-          }
-          const dip = P.tableY + 8e-3 - (pt[1] - rr);
-          if (!isHand || palm.after > 0) {
-            if (dip > 0 && Math.abs(pt[0]) < P.tableW / 2 + rr && pt[2] > -P.tableL / 2 - rr) {
-              pen += dip * dip;
-              if (dip > maxPen) maxPen = dip;
-              why.table = Math.max(why.table || 0, dip);
-            }
-          }
-        }
-        cat = "fold";
-        hit(len(sub(Wf, L.Sf)), 0.2);
-        cat = "torso";
-        if (palm.after > 0) hit(len(sub(Wf, closestOnSeg(Wf, L.P, L.C))), BODY.rTorso + 0.03);
-        hit(len(sub(kf.E, closestOnSeg(kf.E, L.P, L.C))), BODY.rTorso + 0.01);
-        if (palm.after > 0.06 && t < 0.2) {
-          const bp = o.ballAt(t).p;
-          cat = "ball";
-          hit(len(sub(bp, closestOnSeg(bp, kf.E, Wf))), P.R + 0.05);
-          hit(len(sub(bp, closestOnSeg(bp, kf.S, kf.E))), P.R + 0.055);
-        }
-      }
-      return { pen, maxPen, why };
-    };
-    let plan = null, freeE = null;
-    const relPt = o.palmAt(1e9).p;
-    search: for (let j = 0; j < polesF.length; j++) for (let i = 0; i < rests.length; i++) {
-      const mid = lerp(relPt, rests[i], 0.5);
-      const ctrls = [mid, add(mid, mul(fl, 0.2)), add(add(mid, mul(fl, 0.24)), [0, 0.12, 0]), add(add(mid, mul(F, 0.12)), mul(fl, 0.28))];
-      for (let c = 0; c < ctrls.length; c++) {
-        const pl_ = { rest: rests[i], ctrl: ctrls[c], pole: polesF[j] };
-        const e = evalPlan(pl_);
-        const score = e.pen + 2e-5 * i + 1e-5 * c + 4e-5 * j;
-        if (!freeE || score < freeE.score) {
-          freeE = { score, maxPen: e.maxPen, i, c, j, why: e.why };
-          plan = pl_;
-        }
-        if (e.pen < 1e-9) break search;
-      }
-    }
-    const poleFree = plan.pole;
-    const at = (t) => {
-      const r = rk(t);
-      const k = ik2(shoulderAt(L, r.W), r.W, pole, BODY.upper, BODY.fore);
-      const palm = o.palmAt(t);
-      const Wf = freeAt(plan, palm);
-      if (palm.after > 0) {
-        const ox = Math.abs(Wf[0]) - P.tableW / 2, oz = -P.tableL / 2 - Wf[2], out = Math.max(ox, oz);
-        const w = 1 - smooth((out - 0.03) / 0.06), need = P.tableY + 0.034 - Wf[1];
-        if (w > 0 && need > 0) Wf[1] += need * w;
-      }
-      let kf = ik2(L.Sf, Wf, poleFree, BODY.upper, BODY.fore);
-      for (let k2 = 1; k2 <= 3; k2++) {
-        const E = kf.E;
-        if (!(E[1] - 0.042 < P.tableY + 4e-3 && Math.abs(E[0]) < P.tableW / 2 + 0.042 && E[2] > -P.tableL / 2 - 0.042)) break;
-        kf = ik2(L.Sf, Wf, add(poleFree, [0, 0.7 * k2, 0]), BODY.upper, BODY.fore);
-      }
-      const C = lerp(k.S, kf.S, 0.5);
-      const neck = addmul(C, L.sd, 0.07);
-      const head = headAt(L, C);
-      const bp = o.ballAt(Math.min(t, 0.04)).p;
-      const aim = t < 0.04 ? bp : lerp(bp, [0, 1, 1.4], smooth((t - 0.04) / 0.35));
-      const lk = sub(aim, head);
-      const hx = lk[0] + F[0] * 0.08, hz = lk[2] + F[2] * 0.08, hh = Math.hypot(hx, hz) || 1e-6;
-      const pit = Math.max(-50 * DEG, Math.min(22 * DEG, Math.atan2(lk[1], hh)));
-      const look = [head[0] + hx / hh * Math.cos(pit), head[1] + Math.sin(pit), head[2] + hz / hh * Math.cos(pit)];
-      return {
-        pelvis: L.P,
-        chest: C,
-        neck,
-        head,
-        look,
-        F,
-        pl,
-        fl,
-        sd: L.sd,
-        shP: k.S,
-        elP: k.E,
-        wrP: r.W,
-        shF: kf.S,
-        elF: kf.E,
-        wrF: Wf,
-        hipP,
-        hipF,
-        knP,
-        knF,
-        anP,
-        anF,
-        racket: r
-      };
-    };
-    return { at, layout: L, pole, stats: { maxPen: best.e.maxPen, reach: best.e.reach, cost: best.cost, tossPen: L.toss.maxPen, tossReach: L.toss.reach, freePen: freeE.maxPen, freePlan: `${freeE.i}${freeE.c}${freeE.j}`, freeWhy: freeE.why } };
+    return st;
   }
 
   // src/serve.js
@@ -981,14 +2206,76 @@ ol.steps em{font-style:normal;font-weight:700}
     backhand: { name: "\u53CD\u624B\u53D1\u7403", short: "\u53CD\u624B", side: 1, face: -1, stance: "front", head: [0.9, -0.25, 0.2], pivot: [-0.6, 0.35, -0.7], elbow: [-0.7, -0.1, 0.7], arcScale: 1, pre: 0.85, post: 1, ready: 0.75, back: 0.05, lift: 0.025 }
   };
   var TYPE_KEYS = ["pendulum", "reverse", "hook", "backhand"];
-  var STYLES = {
-    standard: { name: "\u6807\u51C6\u4E2D\u629B", wMax: [40, 54], rise: [0.3, 0.55], kappa: [31, 42], arcR: [0.22, 0.3], pre: [1.2, 1.5], post: [1, 1.3], clear: [0.012, 0.04] },
-    wrist: { name: "\u624B\u8155\u5C0F\u52A8\u4F5C", wMax: [36, 50], rise: [0.22, 0.4], kappa: [29, 41], arcR: [0.13, 0.17], pre: [1, 1.3], post: [0.8, 1.1], clear: [0.012, 0.035] },
-    arm: { name: "\u5927\u81C2\u949F\u6446", wMax: [44, 58], rise: [0.35, 0.65], kappa: [33, 43], arcR: [0.33, 0.42], pre: [1.1, 1.4], post: [1.1, 1.4], clear: [0.015, 0.05] },
-    high: { name: "\u9AD8\u629B", wMax: [46, 62], rise: [1, 1.7], kappa: [35, 43], arcR: [0.2, 0.3], pre: [1.2, 1.5], post: [1, 1.3], clear: [0.015, 0.05] },
-    low: { name: "\u4F4E\u629B\u5FEB\u8282\u594F", wMax: [34, 48], rise: [0.17, 0.24], kappa: [27, 40], arcR: [0.16, 0.26], pre: [1, 1.3], post: [0.9, 1.2], clear: [0.01, 0.03] }
+  var PLAYERS = {
+    std: {
+      name: "\u6807\u51C6\u4E2D\u629B",
+      note: "\u629B\u7403\u9F50\u7709\uFF0C\u5F2F\u8170\u9002\u4E2D\uFF0C\u52A8\u4F5C\u4E0D\u5927\u4E0D\u5C0F",
+      shirt: 2923660,
+      wMax: [40, 54],
+      rise: [0.3, 0.55],
+      kappa: [31, 42],
+      clear: [0.012, 0.04],
+      hc: 0,
+      mo: { py: 0.8, lean: 0, tempo: 0.25, wrist: 1, bs: 1, follow: 1, rest: { side: "wing", front: "low" }, followUp: 0.1, fakes: ["lift", "chop"] }
+    },
+    crouch: {
+      name: "\u4F4E\u8E72\u624B\u8155\u578B",
+      note: "\u8E72\u5F97\u5F88\u4F4E\u3001\u8138\u5FEB\u8D34\u5230\u53F0\u9762\uFF0C\u5F15\u62CD\u5C0F\uFF0C\u9760\u624B\u8155\u4E00\u6296",
+      shirt: 14178090,
+      wMax: [38, 52],
+      rise: [0.22, 0.4],
+      kappa: [30, 42],
+      clear: [0.01, 0.032],
+      hc: -0.02,
+      mo: { py: 0.74, lean: 8, rise: 24, tempo: 0.21, wrist: 1.35, bs: 0.7, follow: 0.7, stance: 1.08, rest: { side: "back", front: "tuck" }, followUp: 0.06, fakes: ["tuck", "lift"] }
+    },
+    high: {
+      name: "\u9AD8\u629B\u5927\u6446\u578B",
+      note: "\u7403\u629B\u8FC7\u5934\u9876\u4E00\u7C73\u591A\uFF0C\u5F15\u62CD\u5927\uFF0C\u5927\u81C2\u5E26\u7740\u7529\uFF0C\u8F6C\u5F97\u51F6",
+      shirt: 8016583,
+      wMax: [46, 62],
+      rise: [1, 1.7],
+      kappa: [35, 43],
+      clear: [0.015, 0.05],
+      hc: 0,
+      mo: { py: 0.82, lean: -2, tempo: 0.3, wrist: 0.8, bs: 1.35, follow: 1.25, rise: 32, rest: { side: "wing", front: "low" }, followUp: 0.22, fakes: ["lift", "chop"] }
+    },
+    quick: {
+      name: "\u7AD9\u76F4\u5FEB\u8282\u594F",
+      note: "\u7AD9\u5F97\u6BD4\u8F83\u76F4\uFF0C\u629B\u5F97\u4F4E\uFF0C\u51FA\u624B\u5FEB",
+      shirt: 14725690,
+      wMax: [34, 48],
+      rise: [0.17, 0.24],
+      kappa: [27, 40],
+      clear: [0.01, 0.03],
+      hc: 0.01,
+      mo: { py: 0.86, lean: -12, rise: 18, yaw: 12, tempo: 0.2, wrist: 1.1, bs: 0.75, follow: 0.85, bsT: 0.3, rest: { side: "hip", front: "low" }, followUp: 0.05, fakes: ["tuck", "chop"] }
+    },
+    elbow: {
+      name: "\u62AC\u8098\u5185\u6263\u578B",
+      note: "\u8098\u67B6\u5F97\u9AD8\uFF0C\u624B\u8155\u5F80\u91CC\u6263\u5F97\u6DF1\uFF0C\u62CD\u5934\u5782\u5F97\u4F4E",
+      shirt: 3832022,
+      wMax: [42, 56],
+      rise: [0.35, 0.65],
+      kappa: [32, 43],
+      clear: [0.012, 0.04],
+      hc: 0.01,
+      mo: { py: 0.8, lean: 3, tempo: 0.26, wrist: 1.25, bs: 1.1, follow: 1, wd: -18, rest: { side: "hip", front: "tuck" }, followUp: 0.12, fakes: ["lift", "tuck"] }
+    },
+    showy: {
+      name: "\u6536\u62CD\u5E45\u5EA6\u5927",
+      note: "\u89E6\u7403\u540E\u7684\u52A8\u4F5C\u7279\u522B\u5927\uFF08\u5F00\u4E86\u5047\u52A8\u4F5C\u65F6\u5C24\u5176\u660E\u663E\uFF09",
+      shirt: 13056107,
+      wMax: [40, 54],
+      rise: [0.3, 0.6],
+      kappa: [31, 42],
+      clear: [0.012, 0.04],
+      hc: 0,
+      mo: { py: 0.8, lean: 0, tempo: 0.24, wrist: 1.1, bs: 1, follow: 1.3, fakeAmp: 1.35, rest: { side: "wing", front: "low" }, followUp: 0.14, fakes: ["lift", "chop", "tuck"] }
+    }
   };
-  var STYLE_KEYS = ["standard", "wrist", "arm", "high", "low"];
+  var PLAYER_KEYS = ["std", "crouch", "high", "quick", "elbow", "showy"];
+  var PLAYER_ALIAS = { standard: "std", wrist: "crouch", arm: "high", high: "high", low: "quick" };
   function spinParts(w, v) {
     const hl = Math.hypot(v[0], v[2]) || 1;
     const f = [v[0] / hl, 0, v[2] / hl];
@@ -1312,8 +2599,8 @@ ol.steps em{font-style:normal;font-weight:700}
     for (let i = 0; i <= 40; i++) {
       const t = -T1 - Tb + (tDone + T1 + Tb) * i / 40;
       const pz = pose(t), nz = qRot(pz.q, [0, 0, 1]);
-      const drop = 0.078 * Math.sqrt(Math.max(0, 1 - nz[1] * nz[1])), reach = 0.078;
-      if (pz.b[1] - drop < P.tableY + 4e-3 && pz.b[2] + reach > -P.tableL / 2 && Math.abs(pz.b[0]) < P.tableW / 2 + reach) {
+      const drop = 0.078 * Math.sqrt(Math.max(0, 1 - nz[1] * nz[1])), reach2 = 0.078;
+      if (pz.b[1] - drop < P.tableY + 4e-3 && pz.b[2] + reach2 > -P.tableL / 2 && Math.abs(pz.b[0]) < P.tableW / 2 + reach2) {
         clipTable = true;
         break;
       }
@@ -1349,7 +2636,7 @@ ol.steps em{font-style:normal;font-weight:700}
     };
   }
   function assemble(base) {
-    const { toss, pc, n, vr, col, sim, T, hand, swing } = base;
+    const { toss, pc, n, vr, col, sim, T, hand } = base;
     const verdict = judge(sim);
     const launch = col ? spinParts(col.w, col.v) : null;
     let arrive = null;
@@ -1360,8 +2647,6 @@ ol.steps em{font-style:normal;font-weight:700}
     const cls = arrive ? classOf(arrive.top) : null;
     const tRel = -toss.T;
     const tPalm0 = tRel - toss.Ta;
-    const tStart = Math.min(tPalm0, swing.tReady) - 0.45;
-    const tEnd = Math.max(sim.end.t, swing.tDone) + 0.05;
     const q0 = [0, 0, 0, 1];
     const ballAt = (t) => {
       if (t >= 0 && col) {
@@ -1382,30 +2667,30 @@ ol.steps em{font-style:normal;font-weight:700}
       const tau = t - tPalm0, acc = toss.u0 / toss.Ta;
       return { p: [pc[0], toss.yStart + 0.5 * acc * tau * tau, pc[2]], v: [0, acc * tau, 0], w: [0, 0, 0], q: q0, phase: "hand" };
     };
-    const palmAt = (t) => {
-      const b = ballAt(Math.min(t, tRel)).p;
-      return { p: [b[0], b[1] - P.R - 0.02, b[2]], after: t - tRel };
-    };
-    let body = null, clipBall = 0;
-    if (!base.lab) {
-      body = makeBody({ T, hand, pc, pose: swing.pose, face: T.face, tReady: swing.tReady, tDone: swing.tDone, palmAt, ballAt, tossY: [toss.yStart, toss.apex] });
-      for (let t = -swing.T1; t < -4e-3; t += 4e-3) {
-        const pz = swing.pose(t), nz = qRot(pz.q, [0, 0, T.face]), bp = ballAt(t).p;
-        const rel = sub(bp, pz.b), dn = dot(rel, nz), rho = len(sub(rel, mul(nz, dn)));
-        if (rho < 0.078 && Math.abs(dn) < P.R - 4e-3) clipBall = Math.max(clipBall, P.R - Math.abs(dn));
-      }
+    let body = null, racketAt, tReady, tDone, tSw0, tSw1, headDir = null;
+    if (base.lab) {
+      const sw = base.swing;
+      racketAt = (t) => {
+        const pz = sw.pose(t), zw = qRot(pz.q, [0, 0, T.face]);
+        return { c: addmul(pz.b, zw, -55e-4), q: pz.q };
+      };
+      tReady = sw.tReady;
+      tDone = sw.tDone;
+      tSw0 = -sw.T1;
+      tSw1 = sw.tDone;
+    } else {
+      const m = buildMotion({ type: base.type, kind: base.kind, hand, face: T.face, pc, n, vr, vOut: col ? col.v : null, off: base.off, tRel, tPalm0, tossY: [toss.yStart, toss.apex], ballAt, pl: base.mo, fake: base.fakeKind, rng: base.rng, dbg: base.dbg });
+      if (!m.ok) return { fail: "motion:" + m.why };
+      body = m;
+      racketAt = m.racketAt;
+      tReady = m.tReady;
+      tDone = m.tDone;
+      tSw0 = m.tSwing0;
+      tSw1 = m.tSwingEnd;
+      headDir = m.at(0).racket.l;
     }
-    let clipArm = 0;
-    if (body && col) {
-      for (let t = 6e-3; t < 0.16; t += 0.01) {
-        const J = body.at(t), bp = ballAt(t).p;
-        for (const [a, b, rr] of [[J.shP, J.elP, 0.045], [J.elP, J.wrP, 0.038], [J.shF, J.elF, 0.045], [J.elF, J.wrF, 0.04]]) {
-          const ab = sub(b, a), l2 = dot(ab, ab) || 1e-9, u = Math.max(0, Math.min(1, dot(sub(bp, a), ab) / l2));
-          const d = len(sub(bp, addmul(a, ab, u)));
-          if (d < rr + P.R) clipArm = Math.max(clipArm, rr + P.R - d);
-        }
-      }
-    }
+    const tStart = Math.min(tPalm0, tReady) - 0.45;
+    const tEnd = Math.max(sim.end.t, tDone) + 0.05;
     const an = {};
     if (col) {
       const dv = sub(col.v, toss.vb);
@@ -1432,6 +2717,8 @@ ol.steps em{font-style:normal;font-weight:700}
       an.push = rn;
       an.spotUp = -n[1];
       an.spotSide = -dot(n, h);
+      an.off = base.off ? base.off.slice() : [0, 0];
+      an.head = headDir;
     }
     return {
       ...base,
@@ -1447,9 +2734,9 @@ ol.steps em{font-style:normal;font-weight:700}
       ballAt,
       body,
       an,
-      clipBall,
-      clipArm,
-      racketAt: swing.pose,
+      racketAt,
+      tSwing0: tSw0,
+      tSwingEnd: tSw1,
       events: sim.ev
     };
   }
@@ -1460,7 +2747,7 @@ ol.steps em{font-style:normal;font-weight:700}
     return { col, sim };
   }
   function generateServe(cfg, rng = Math.random) {
-    for (let attempt = 0; attempt < 16; attempt++) {
+    for (let attempt = 0; attempt < 18; attempt++) {
       const s = tryGenerate(cfg, rng, attempt);
       if (s) {
         s.attempts = attempt + 1;
@@ -1475,8 +2762,10 @@ ol.steps em{font-style:normal;font-weight:700}
       return null;
     };
     const T = TYPES[cfg.type], hand = cfg.hand || 1;
-    const styleKey = cfg.style && STYLES[cfg.style] ? cfg.style : STYLE_KEYS[Math.floor(rng() * STYLE_KEYS.length)];
-    const st = STYLES[styleKey];
+    const pkey0 = cfg.player || PLAYER_ALIAS[cfg.style] || cfg.style;
+    const playerKey = PLAYERS[pkey0] ? pkey0 : PLAYER_KEYS[Math.floor(rng() * PLAYER_KEYS.length)];
+    const st = PLAYERS[playerKey];
+    const kind = cfg.kind === "pure" ? "pure" : "side";
     const side = T.side * hand;
     let tgt;
     if (cfg.target) {
@@ -1487,9 +2776,9 @@ ol.steps em{font-style:normal;font-weight:700}
     }
     const lenClass = tgt.z < 0.55 ? "short" : tgt.z < 0.9 ? "half" : "long";
     const xc = cfg.pos === void 0 ? hand * U(rng, [0.25, 0.55]) : cfg.pos * 0.42 + (rng() * 2 - 1) * 0.1;
-    const hc = (lenClass === "long" ? U(rng, [0.09, 0.15]) : lenClass === "half" ? U(rng, [0.1, 0.18]) : U(rng, [0.13, 0.22])) + (T.lift || 0);
+    const hc = (lenClass === "long" ? U(rng, [0.09, 0.15]) : lenClass === "half" ? U(rng, [0.1, 0.18]) : U(rng, [0.13, 0.22])) + (T.lift || 0) + (st.hc || 0);
     const zc = -P.tableL / 2 - (lenClass === "short" ? U(rng, [0.1, 0.2]) : U(rng, [0.17, 0.28])) - (T.back || 0);
-    const yc = P.tableY + hc;
+    const yc = P.tableY + Math.max(0.07, hc);
     let rise = U(rng, st.rise);
     if (cfg.intent === "back" && attempt > 5) rise = Math.max(rise, 0.4 + 0.05 * attempt);
     const toss = simToss(xc, zc, P.tableY + U(rng, [0.07, 0.13]), rise, yc);
@@ -1498,61 +2787,118 @@ ol.steps em{font-style:normal;font-weight:700}
     const cap = Math.atan(P.rubber.mu) - 2 * DEG2;
     let kappa = Math.min(U(rng, st.kappa) * DEG2, cap);
     let wMax = U(rng, st.wMax) * RPS;
-    let chi;
-    if (cfg.intent === "top") {
-      chi = (rng() < 0.2 ? U(rng, [-6, 10]) : U(rng, [12, 62])) * DEG2;
-      if (lenClass === "short") {
-        chi = Math.min(chi, U(rng, [10, 38]) * DEG2);
-        wMax *= 0.8;
+    let chi, dead = false;
+    if (kind === "side") {
+      if (cfg.intent === "top") {
+        dead = cfg.dead !== void 0 ? !!cfg.dead : rng() < 0.2;
+        chi = (dead ? U(rng, [-6, 10]) : U(rng, [12, 62])) * DEG2;
+        if (lenClass === "short") {
+          chi = Math.min(chi, U(rng, [10, 38]) * DEG2);
+          wMax *= 0.8;
+        }
+      } else if (cfg.intent === "back") {
+        chi = -U(rng, [58, 80]) * DEG2;
+        kappa = Math.min(cap, kappa + (4 + attempt) * DEG2);
+        wMax *= 1.1;
+      } else chi = -U(rng, [25, 45]) * DEG2;
+    } else {
+      const tilt = U(rng, [0, 10]) * DEG2;
+      if (cfg.intent === "top") {
+        dead = cfg.dead !== void 0 ? !!cfg.dead : rng() < 0.45;
+        if (dead) {
+          chi = -(90 * DEG2 - tilt * 1.5);
+          kappa = U(rng, [1.5, 4.5]) * (lenClass === "long" ? 0.8 : 1) * DEG2;
+        } else {
+          chi = 90 * DEG2 - tilt;
+          if (lenClass === "short") {
+            kappa *= 0.6;
+            wMax *= 0.75;
+          }
+        }
+      } else {
+        chi = -(90 * DEG2 - tilt);
+        if (cfg.intent === "back") {
+          kappa = Math.min(cap, kappa + (4 + attempt) * DEG2);
+          wMax *= 1.12;
+        }
       }
-    } else if (cfg.intent === "back") {
-      chi = -U(rng, [58, 80]) * DEG2;
-      kappa = Math.min(cap, kappa + (4 + attempt) * DEG2);
-      wMax *= 1.1;
-    } else chi = -U(rng, [25, 45]) * DEG2;
-    const mkRule = (ch) => (v) => spinRule(v, vb, ch, kappa, side, wMax);
+    }
+    const mkRule = (ch, kap) => (v) => spinRule(v, vb, ch, kap, side, wMax);
     const branch = lenClass === "long" ? "fast" : lenClass === "short" ? rng() < 0.9 ? "slow" : "fast" : rng() < 0.6 ? "slow" : "fast";
     const cT = U(rng, st.clear);
-    let Ln = findLaunch(pc, mkRule(chi), tgt, branch, cT);
+    let Ln = findLaunch(pc, mkRule(chi, kappa), tgt, branch, cT);
     if (!Ln) return fail("launch");
     if (cfg.intent !== "top") {
-      const want = cfg.intent === "back" ? -U(rng, [6.5, 20]) * RPS : U(rng, [-2.5, 2.5]) * RPS;
-      const arrTop = (ch, warm) => {
-        const r = solveLaunch(pc, mkRule(ch), tgt, Ln.vy0, [warm[0], warm[2]]);
+      const want = cfg.intent === "back" ? -U(rng, kind === "pure" ? [7.5, 24] : [6.5, 20]) * RPS : U(rng, [-2.5, 2.5]) * RPS;
+      const arrTop = (ch, kap, warm) => {
+        const r = solveLaunch(pc, mkRule(ch, kap), tgt, Ln.vy0, [warm[0], warm[2]]);
         if (!r) return null;
-        return { top: spinParts(r.info.b2.wOut, r.info.b2.vOut).top, chi: ch, r };
+        return { top: spinParts(r.info.b2.wOut, r.info.b2.vOut).top, chi: ch, kap, r };
       };
-      let cur = arrTop(chi, Ln.v);
-      if (!cur) return fail("chi0");
-      const dir = cur.top > want ? -1 : 1;
-      let other = null;
-      for (let k = 0; k < 14 && !other; k++) {
-        const nx = Math.max(-88 * DEG2, Math.min(30 * DEG2, cur.chi + dir * 9 * DEG2));
-        if (nx === cur.chi) break;
-        const f = arrTop(nx, cur.r.v);
-        if (!f) break;
-        if ((f.top - want) * dir >= 0) other = f;
-        else cur = f;
-      }
-      if (!other) {
-        if (cfg.intent === "back" && cur.top < -(TH_RPS + 1) * RPS) {
-          chi = cur.chi;
-          Ln = cur.r;
-        } else return fail("not-enough-back");
-      } else {
-        let lo = dir < 0 ? other : cur, hi = dir < 0 ? cur : other;
-        for (let k = 0; k < 7; k++) {
-          const fm = arrTop((lo.chi + hi.chi) / 2, lo.r.v);
-          if (!fm) break;
-          if (fm.top > want) hi = fm;
-          else lo = fm;
+      if (kind === "side") {
+        let cur = arrTop(chi, kappa, Ln.v);
+        if (!cur) return fail("chi0");
+        const dir = cur.top > want ? -1 : 1;
+        let other = null;
+        for (let k = 0; k < 14 && !other; k++) {
+          const nx = Math.max(-88 * DEG2, Math.min(30 * DEG2, cur.chi + dir * 9 * DEG2));
+          if (nx === cur.chi) break;
+          const f = arrTop(nx, kappa, cur.r.v);
+          if (!f) break;
+          if ((f.top - want) * dir >= 0) other = f;
+          else cur = f;
         }
-        const best = Math.abs(lo.top - want) < Math.abs(hi.top - want) ? lo : hi;
-        chi = best.chi;
-        Ln = best.r;
+        if (!other) {
+          if (cfg.intent === "back" && cur.top < -(TH_RPS + 1) * RPS) {
+            chi = cur.chi;
+            Ln = cur.r;
+          } else return fail("not-enough-back");
+        } else {
+          let lo = dir < 0 ? other : cur, hi = dir < 0 ? cur : other;
+          for (let k = 0; k < 7; k++) {
+            const fm = arrTop((lo.chi + hi.chi) / 2, kappa, lo.r.v);
+            if (!fm) break;
+            if (fm.top > want) hi = fm;
+            else lo = fm;
+          }
+          const best = Math.abs(lo.top - want) < Math.abs(hi.top - want) ? lo : hi;
+          chi = best.chi;
+          Ln = best.r;
+        }
+      } else {
+        const kMax = cfg.intent === "back" ? kappa : cap;
+        let lo = arrTop(chi, kMax, Ln.v);
+        if (!lo) return fail("kap-max");
+        if (lo.top > want) {
+          if (cfg.intent === "back" && lo.top < -(TH_RPS + 1.5) * RPS) {
+            kappa = lo.kap;
+            Ln = lo.r;
+          } else return fail("not-enough-back");
+        } else {
+          let hi = null, cur = lo;
+          for (let kp = kMax - 6 * DEG2; kp > 1 * DEG2 && !hi; kp -= 6 * DEG2) {
+            const f = arrTop(chi, kp, cur.r.v);
+            if (!f) break;
+            if (f.top >= want) hi = f;
+            else {
+              lo = f;
+              cur = f;
+            }
+          }
+          if (!hi) return fail("kap-bracket");
+          for (let k = 0; k < 7; k++) {
+            const fm = arrTop(chi, (lo.kap + hi.kap) / 2, lo.r.v);
+            if (!fm) break;
+            if (fm.top > want) hi = fm;
+            else lo = fm;
+          }
+          const best = Math.abs(lo.top - want) < Math.abs(hi.top - want) ? lo : hi;
+          kappa = best.kap;
+          Ln = best.r;
+        }
       }
       if (Ln.clear < 6e-3 || Ln.clear > 0.075) {
-        Ln = findLaunch(pc, mkRule(chi), tgt, branch, cT);
+        Ln = findLaunch(pc, mkRule(chi, kappa), tgt, branch, cT);
         if (!Ln) return fail("relaunch");
       }
     }
@@ -1561,22 +2907,37 @@ ol.steps em{font-style:normal;font-weight:700}
     const vr = inverseRacket(vb, sr.dv, n, P.rubber);
     const { col, sim } = forward(pc, vb, n, vr, P.rubber);
     if (!col || col.regime !== "grip") return fail("slip");
-    const swing = buildSwing(pc, n, vr, T, hand, st, !!cfg.fake, cfg.intent, rng);
-    if (swing.clipTable) return fail("clip-table");
-    const s = assemble({ type: cfg.type, hand, style: styleKey, intent: cfg.intent, target: tgt, lenClass, toss, pc, n, vr, col, sim, T, swing, chi, kappa, fake: !!cfg.fake });
-    if (!s.legal) return fail("illegal:" + s.verdict.why);
-    if (s.verdict.net.clear < 4e-3) return fail("net-margin");
-    const b1 = s.verdict.b1.p, b2 = s.verdict.b2.p;
-    if (Math.abs(b1[0]) > P.tableW / 2 - 0.02 || b1[2] > -0.04) return fail("b1-edge");
-    if (Math.abs(b2[0]) > P.tableW / 2 - 0.02 || b2[2] > P.tableL / 2 - 0.02) return fail("b2-edge");
-    if (s.cls !== cfg.intent) return fail("class:" + s.cls);
-    if (s.clipBall > 6e-3) return fail("clip-ball");
-    if (s.body.stats.maxPen > 0.02) return fail("clip-body");
-    if (s.body.stats.reach > 0.02) return fail("reach");
-    if (s.body.stats.tossPen > 4e-3) return fail("toss-head");
-    if (s.body.stats.tossReach > 3e-3) return fail("toss-reach");
-    if (s.body.stats.freePen > 0.02) return fail("free-hand");
-    if (s.clipArm > 8e-3) return fail("clip-arm");
+    {
+      const jd = judge(sim);
+      if (!jd.legal) return fail("illegal:" + jd.why);
+      if (jd.net.clear < 4e-3) return fail("net-margin");
+      const b1 = jd.b1.p, b2 = jd.b2.p;
+      if (Math.abs(b1[0]) > P.tableW / 2 - 0.02 || b1[2] > -0.04) return fail("b1-edge");
+      if (Math.abs(b2[0]) > P.tableW / 2 - 0.02 || b2[2] > P.tableL / 2 - 0.02) return fail("b2-edge");
+      const c0 = classOf(spinParts(jd.arrive.wOut, jd.arrive.vOut).top);
+      if (c0 !== cfg.intent) return fail("class:" + c0);
+    }
+    const off = [U(rng, [-0.014, 0.014]), dead || cfg.intent === "flat" ? U(rng, [-0.046, -0.012]) : cfg.intent === "back" ? U(rng, [0.012, 0.05]) : U(rng, [-0.02, 0.04])];
+    let fakeKind = null;
+    if (cfg.fake) {
+      const opts = st.mo.fakes.filter((k) => k === "tuck" || k === "chop" === (cfg.intent === "top"));
+      fakeKind = cfg.fakeKind || (opts.length ? opts[Math.floor(rng() * opts.length)] : cfg.intent === "top" ? "chop" : "lift");
+    }
+    const mo = { ...st.mo, tempo: st.mo.tempo * U(rng, [0.92, 1.1]), bs: st.mo.bs * U(rng, [0.88, 1.12]) };
+    const s = assemble({ dbg: cfg._pose, type: cfg.type, hand, player: playerKey, kind, dead, intent: cfg.intent, target: tgt, lenClass, toss, pc, n, vr, col, sim, T, chi, kappa, off, mo, fake: !!cfg.fake, fakeKind, rng });
+    if (s.fail) return fail(s.fail);
+    const ms = s.body.stats;
+    if (cfg._stat) cfg._stat(ms, s);
+    if (ms.nan) return fail("nan");
+    if (ms.early > 6e-3) return fail("clip-ball");
+    if (ms.late > 8e-3) return fail("clip-ball-after");
+    if (ms.body > 0.03) return fail("clip-body");
+    if (ms.table > 0.015) return fail("clip-table");
+    if (ms.ballBody > 0.012) return fail("ball-body");
+    if (ms.free > 0.035) return fail("free-hand");
+    if (ms.leg > 0.012) return fail("leg");
+    if (ms.hide > -0.012) return fail("hidden");
+    if (ms.hideT > 0.045) return fail("hidden-toss");
     return s;
   }
   function manualServe(lab, rng = Math.random) {
@@ -1593,7 +2954,7 @@ ol.steps em{font-style:normal;font-weight:700}
     const st = { arcR: [0.26, 0.26], pre: [1.25, 1.25], post: [1.1, 1.1] };
     const fixed = () => 0.5;
     const swing = buildSwing(pc, n, vr, T, hand, st, false, "flat", fixed);
-    const s = assemble({ type: lab.type || "pendulum", hand, style: "lab", intent: null, target: null, toss, pc, n, vr, col, sim, T, swing, lab: true });
+    const s = assemble({ type: lab.type || "pendulum", hand, player: "lab", kind: "side", intent: null, target: null, toss, pc, n, vr, col, sim, T, swing, lab: true });
     if (!col) s.verdict.why = "\u62CD\u5B50\u6CA1\u78B0\u5230\u7403\uFF08\u62CD\u9762\u662F\u80CC\u7740\u7403\u8D70\u7684\uFF09";
     return s;
   }
@@ -1606,16 +2967,15 @@ ol.steps em{font-style:normal;font-weight:700}
   var $ = (s, r = document) => r.querySelector(s);
   var $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   var DEG3 = Math.PI / 180;
-  var clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  var clamp3 = (x, a, b) => Math.max(a, Math.min(b, x));
   var smooth2 = (u) => u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u);
   var pick = (a) => a[Math.floor(Math.random() * a.length)];
-  var CLS = { top: "\u4FA7\u4E0A", back: "\u4FA7\u4E0B", flat: "\u4E0D\u8F6C" };
   var PRESETS = {
-    basic: { fake: "none", choices: 2, speed: 0.5, watch: "both", style: "standard", note: "\u534A\u901F\u64AD\u653E\uFF0C\u6CA1\u6709\u5047\u52A8\u4F5C\uFF0C\u5BF9\u624B\u7528\u540C\u4E00\u79CD\u4E60\u60EF\u53D1\u3002\u5148\u628A\u62CD\u578B\u770B\u660E\u767D\u3002" },
-    mid: { fake: "some", choices: 2, speed: 1, watch: "both", style: "random", note: "\u539F\u901F\u3002\u5BF9\u624B\u6BCF\u7403\u6362\u4E00\u79CD\u4E60\u60EF\uFF0C\u6709\u65F6\u89E6\u7403\u540E\u53CD\u7740\u6536\u62CD\u3002" },
-    match: { fake: "all", choices: 3, speed: 1, watch: "both", style: "random", note: '\u539F\u901F\uFF0C\u6BCF\u7403\u90FD\u6709\u5047\u52A8\u4F5C\uFF0C\u8FD8\u8981\u5206\u51FA"\u4E0D\u8F6C"\u3002' }
+    basic: { kinds: { side: true, pure: false }, fake: "none", choices: 2, speed: 0.5, watch: "land", player: "std", note: "\u534A\u901F\uFF0C\u6CA1\u6709\u5047\u52A8\u4F5C\uFF0C\u540C\u4E00\u4E2A\u4EBA\u53D1\uFF0C\u53EA\u5206\u4FA7\u4E0A / \u4FA7\u4E0B\u3002\u5148\u628A\u62CD\u578B\u770B\u660E\u767D\u3002" },
+    mid: { kinds: { side: true, pure: true }, fake: "some", choices: 3, speed: 1, watch: "land", player: "random", note: '\u539F\u901F\uFF0C\u6BCF\u7403\u6362\u4E00\u4E2A\u4EBA\u53D1\uFF0C\u6709\u65F6\u89E6\u7403\u540E\u505A\u5047\u52A8\u4F5C\uFF1B\u52A0\u4E0A\u4E0D\u5E26\u4FA7\u65CB\u7684"\u8F6C\u4E0E\u4E0D\u8F6C"\uFF0C\u8981\u5206\u51FA\u4E0D\u8F6C\u3002' },
+    match: { kinds: { side: true, pure: true }, fake: "all", choices: 3, speed: 1, watch: "net", player: "random", note: "\u539F\u901F\uFF0C\u6BCF\u7403\u90FD\u6709\u5047\u52A8\u4F5C\uFF0C\u7403\u4E00\u8FC7\u7F51\u5C31\u770B\u4E0D\u5230\u4E86\uFF1A\u53EA\u80FD\u9760\u62CD\u578B\u548C\u524D\u534A\u6BB5\u7403\u8DEF\u3002" }
   };
-  var STORE = "pp-spin-v2";
+  var STORE = "pp-spin-v3";
   var S = {
     mode: "practice",
     phase: "ready",
@@ -1625,7 +2985,9 @@ ol.steps em{font-style:normal;font-weight:700}
     playing: false,
     rate: 1,
     stopAt: null,
+    auto: null,
     answer: null,
+    ansWhen: "",
     view: "recv",
     home: "recv",
     aids: true,
@@ -1635,7 +2997,7 @@ ol.steps em{font-style:normal;font-weight:700}
     spinRate: 0.45,
     dirty: false,
     live: null,
-    set: { preset: "basic", types: { pendulum: true, reverse: true, hook: true, backhand: true }, hand: 1, pos: [true, true, true], len: [true, true], style: "standard", fake: "none", choices: 2, speed: 0.5, watch: "both" },
+    set: { preset: "basic", types: { pendulum: true, reverse: true, hook: true, backhand: true }, kinds: { side: true, pure: false }, player: "std", hand: 1, pos: [true, true, true], len: [true, true], fake: "none", choices: 2, speed: 0.5, watch: "land" },
     lab: { type: "pendulum", hand: 1, xc: 0.35, zc: -1.5, hc: 0.16, vfall: 3, openDeg: 62, yawDeg: -14, vr: [1.6, -0.6, 4.4], mu: P.rubber.mu, et: P.rubber.et0 }
   };
   function load(extra) {
@@ -1645,6 +3007,9 @@ ol.steps em{font-style:normal;font-weight:700}
       Object.assign(S.set, d.set);
       if (!Array.isArray(S.set.pos) || S.set.pos.length !== 3) S.set.pos = [true, true, true];
       if (!Array.isArray(S.set.len) || S.set.len.length !== 2) S.set.len = [true, true];
+      if (!S.set.kinds || !S.set.kinds.side && !S.set.kinds.pure) S.set.kinds = { side: true, pure: false };
+      if (S.set.player !== "random" && !PLAYERS[S.set.player]) S.set.player = "std";
+      if (!["land", "net", "racket"].includes(S.set.watch)) S.set.watch = "land";
     } catch (e) {
     }
   }
@@ -1699,6 +3064,7 @@ ol.steps em{font-style:normal;font-weight:700}
     const UP = new T3.Vector3(0, 1, 0), ZAX = new T3.Vector3(0, 0, 1);
     const V = (a) => new T3.Vector3(a[0], a[1], a[2]);
     const _v = new T3.Vector3(), _v2 = new T3.Vector3(), _c = new T3.Vector3(), _c2 = new T3.Vector3(), _q = new T3.Quaternion(), _m = new T3.Matrix4();
+    const _a = new T3.Vector3(), _b = new T3.Vector3(), _x = new T3.Vector3(), _y = new T3.Vector3(), _z = new T3.Vector3();
     const std = (hex, rough = 0.8) => new T3.MeshStandardMaterial({ color: C(hex), roughness: rough });
     (function buildArena() {
       const floor = new T3.Mesh(new T3.PlaneGeometry(26, 22), new T3.MeshStandardMaterial({ color: C(8138539), roughness: 0.95, side: T3.DoubleSide }));
@@ -1834,19 +3200,19 @@ ol.steps em{font-style:normal;font-weight:700}
     })();
     const body = new T3.Group();
     scene.add(body);
-    const mJersey = std(2923660, 0.85), mShorts = std(1712689, 0.9), mSkin = std(14726287, 0.75), mHair = std(1511951, 0.9), mShoe = std(15330545, 0.7), mEye = std(1709072, 0.5);
+    const mJersey = std(2923660, 0.85), mShorts = std(1712689, 0.9), mSkin = std(14726287, 0.75), mHair = std(1511951, 0.9), mShoe = std(15330545, 0.7), mEye = std(1709072, 0.5), mSock = std(15921906, 0.85);
     const addMesh = (geo, mat, parent = body) => {
       const m = new T3.Mesh(geo, mat);
       m.castShadow = true;
       parent.add(m);
       return m;
     };
-    const limb = (rb, rt, mat) => {
-      const g = new T3.CylinderGeometry(rt, rb, 1, 16);
+    const limb = (rb, rt, mat, seg = 16) => {
+      const g = new T3.CylinderGeometry(rt, rb, 1, seg);
       g.translate(0, 0.5, 0);
       return addMesh(g, mat);
     };
-    const ball = (r, mat, parent) => addMesh(new T3.SphereGeometry(r, 18, 14), mat, parent);
+    const ball = (r, mat, parent, ws = 18, hs = 14) => addMesh(new T3.SphereGeometry(r, ws, hs), mat, parent);
     const setLimb = (m, a, b) => {
       m.position.copy(a);
       _v.copy(b).sub(a);
@@ -1854,14 +3220,28 @@ ol.steps em{font-style:normal;font-weight:700}
       m.scale.set(1, L, 1);
       m.quaternion.setFromUnitVectors(UP, _v.multiplyScalar(1 / L));
     };
+    const setSlab = (m, a, b, right, sx, sz, len2) => {
+      _y.copy(b).sub(a);
+      const L = _y.length() || 1e-4;
+      _y.multiplyScalar(1 / L);
+      _x.copy(right).addScaledVector(_y, -right.dot(_y));
+      if (_x.lengthSq() < 1e-8) _x.set(1, 0, 0);
+      _x.normalize();
+      _z.crossVectors(_x, _y);
+      _m.makeBasis(_x, _y, _z);
+      m.quaternion.setFromRotationMatrix(_m);
+      m.position.copy(a);
+      m.scale.set(sx, len2 === void 0 ? L : len2, sz);
+    };
     const B = {};
     (function buildBody() {
-      const prof = [[1e-3, -0.06], [0.12, -0.05], [0.168, 0], [0.17, 0.06], [0.15, 0.17], [0.156, 0.27], [0.182, 0.37], [0.176, 0.44], [0.12, 0.49], [0.062, 0.515], [0.055, 0.56]].map((p) => new T3.Vector2(p[0], p[1]));
-      B.torso = addMesh(new T3.LatheGeometry(prof, 28), mJersey);
-      B.torso.scale.z = 0.64;
+      B.belly = limb(1, 0.95, mJersey, 24);
+      B.ribs = limb(0.88, 1, mJersey, 24);
+      B.waist = ball(1, mJersey);
+      B.yoke = limb(0.062, 0.062, mJersey);
+      B.top = ball(1, mJersey);
       B.shorts = ball(1, mShorts);
-      B.shorts.scale.set(0.176, 0.105, 0.125);
-      B.neck = limb(0.052, 0.046, mSkin);
+      B.neck = limb(0.05, 0.045, mSkin);
       B.head = new T3.Group();
       body.add(B.head);
       const skull = ball(0.1, mSkin, B.head);
@@ -1871,72 +3251,88 @@ ol.steps em{font-style:normal;font-weight:700}
       hair.rotation.x = -0.42;
       hair.position.y = 6e-3;
       for (const sx of [-1, 1]) {
-        const e = ball(0.011, mEye, B.head);
+        const e = ball(0.011, mEye, B.head, 10, 8);
         e.position.set(0.034 * sx, 0.012, 0.089);
         e.castShadow = false;
+        const ear = ball(0.018, mSkin, B.head, 10, 8);
+        ear.scale.set(0.5, 1, 0.8);
+        ear.position.set(0.09 * sx, 0, 0);
       }
-      const nose = ball(0.012, mSkin, B.head);
+      const nose = ball(0.012, mSkin, B.head, 10, 8);
       nose.position.set(0, -0.012, 0.099);
       for (const k of ["P", "F"]) {
-        B["sh" + k] = ball(0.06, mJersey);
-        B["up" + k] = limb(0.047, 0.04, mSkin);
-        B["sl" + k] = limb(0.06, 0.053, mJersey);
+        B["sh" + k] = ball(0.062, mJersey);
+        B["up" + k] = limb(0.048, 0.04, mSkin);
+        B["sl" + k] = limb(0.061, 0.054, mJersey);
         B["el" + k] = ball(0.041, mSkin);
-        B["fo" + k] = limb(0.04, 0.03, mSkin);
+        B["fo" + k] = limb(0.04, 0.029, mSkin);
+        B["wr" + k] = ball(0.03, mSkin, body, 12, 10);
+        B["palm" + k] = ball(1, mSkin);
+        B["fg" + k] = [];
+        for (let f = 0; f < 5; f++) {
+          const r = FINGER_RAD[f], segs = [];
+          for (let s2 = 0; s2 < 3; s2++) segs.push({ bone: limb(r * (1 - 0.08 * s2), r * (0.92 - 0.08 * s2), mSkin, 8), tip: ball(r * (0.92 - 0.08 * s2), mSkin, body, 8, 6) });
+          B["fg" + k].push(segs);
+        }
         B["hip" + k] = ball(0.088, mShorts);
-        B["th" + k] = limb(0.068, 0.055, mSkin);
-        B["sh2" + k] = limb(0.09, 0.075, mShorts);
-        B["kn" + k] = ball(0.056, mSkin);
-        B["sn" + k] = limb(0.054, 0.038, mSkin);
+        B["th" + k] = limb(0.07, 0.053, mSkin);
+        B["sh2" + k] = limb(0.092, 0.076, mShorts);
+        B["kn" + k] = ball(0.055, mSkin);
+        B["sn" + k] = limb(0.053, 0.037, mSkin);
+        B["sock" + k] = limb(0.041, 0.043, mSock);
         B["shoe" + k] = ball(1, mShoe);
-        B["shoe" + k].scale.set(0.052, 0.05, 0.135);
+        B["shoe" + k].scale.set(0.05, 0.045, 0.132);
       }
-      B.handP = ball(1, mSkin);
-      B.handP.scale.set(0.034, 0.052, 0.03);
-      B.handF = ball(1, mSkin);
-      B.handF.scale.set(0.045, 0.02, 0.055);
     })();
-    function updateBody(sv, t, rq) {
-      const J = sv.body.at(t);
-      const pelvis = V(J.pelvis), neck = V(J.neck), F = V(J.F);
-      const Y = neck.clone().sub(pelvis);
-      const hgt = Y.length();
-      Y.normalize();
-      const X0 = V(J.shF).sub(V(J.shP));
-      const Z = new T3.Vector3().crossVectors(X0, Y).normalize();
-      if (Z.dot(F) < 0) Z.negate();
-      const X = new T3.Vector3().crossVectors(Y, Z).normalize();
-      _m.makeBasis(X, Y, Z);
-      B.torso.position.copy(pelvis);
-      B.torso.quaternion.setFromRotationMatrix(_m);
-      B.torso.scale.set(1, hgt / 0.53, 0.64);
-      B.shorts.position.copy(pelvis).addScaledVector(Y, 0.01);
-      B.shorts.quaternion.copy(B.torso.quaternion);
+    let shirtOf = null;
+    function updateBody(sv, t) {
+      const J = sv.body.at(t, true);
+      const pel = V(J.pelvis), mid = V(J.mid), chest = V(J.chest), Rh = V(J.R), Rc = V(J.Rc), Uc = V(J.Uc);
+      const Rm = Rh.clone().lerp(Rc, 0.45).normalize();
+      setSlab(B.belly, pel.clone().addScaledVector(V(J.sd1), -0.02), mid, Rm, 0.15, 0.108);
+      setSlab(B.ribs, mid, chest.clone().addScaledVector(Uc, -0.035), Rc, 0.172, 0.114);
+      setSlab(B.waist, mid.clone().addScaledVector(Uc, -0.07), mid.clone().addScaledVector(Uc, 0.07), Rm, 0.1445, 0.1, 0.075);
+      setSlab(B.top, chest.clone().addScaledVector(Uc, -0.095), chest, Rc, 0.172, 0.114, 0.075);
+      setSlab(B.shorts, pel.clone().addScaledVector(UP, -0.06), pel.clone().addScaledVector(V(J.sd1), 0.06).addScaledVector(UP, 0.02), Rh, 0.174, 0.128, 0.115);
+      const shP = V(J.shP), shF = V(J.shF);
+      setLimb(B.yoke, shP, shF);
       const head = V(J.head);
-      setLimb(B.neck, neck.clone().addScaledVector(Y, -0.03), head);
+      setLimb(B.neck, V(J.neck), head);
       B.head.position.copy(head);
-      B.head.lookAt(V(J.look));
+      B.head.lookAt(_v.copy(head).add(_v2.set(J.look[0], J.look[1], J.look[2])));
       for (const k of ["P", "F"]) {
-        const sh = V(J["sh" + k]), el = V(J["el" + k]), wr = V(J["wr" + k]);
+        const sh = k === "P" ? shP : shF, el = V(J["el" + k]), wr = V(J["wr" + k]);
         B["sh" + k].position.copy(sh);
         setLimb(B["up" + k], sh, el);
-        setLimb(B["sl" + k], sh, sh.clone().lerp(el, 0.5));
+        setLimb(B["sl" + k], sh, _a.copy(sh).lerp(el, 0.52));
         B["el" + k].position.copy(el);
         setLimb(B["fo" + k], el, wr);
-        const hip = V(J["hip" + k]), kn = V(J["kn" + k]), an = V(J["an" + k]);
+        B["wr" + k].position.copy(wr);
+        const H = J["hand" + k], d = V(H.d), pn = V(H.p);
+        const right = _b.crossVectors(d, pn);
+        setSlab(B["palm" + k], _a.copy(wr).addScaledVector(d, 4e-3).addScaledVector(pn, -2e-3), _c.copy(wr).addScaledVector(d, 0.094).addScaledVector(pn, -2e-3), right, 0.041, 0.0135, 0.047);
+        B["palm" + k].position.copy(wr).addScaledVector(d, 0.049).addScaledVector(pn, -2e-3);
+        const fg = J["fing" + k];
+        for (let f = 0; f < 5; f++) for (let s2 = 0; s2 < 3; s2++) {
+          const a = fg[f][s2], b = fg[f][s2 + 1], seg = B["fg" + k][f][s2];
+          setLimb(seg.bone, _a.set(a[0], a[1], a[2]), _c.set(b[0], b[1], b[2]));
+          seg.tip.position.set(b[0], b[1], b[2]);
+        }
+        const hip = V(J["hip" + k]), kn = V(J["kn" + k]), an = V(J["an" + k]), toe = J["toe" + k];
         B["hip" + k].position.copy(hip);
         setLimb(B["th" + k], hip, kn);
-        setLimb(B["sh2" + k], hip, hip.clone().lerp(kn, 0.55));
+        setLimb(B["sh2" + k], hip, _a.copy(hip).lerp(kn, 0.55));
         B["kn" + k].position.copy(kn);
         setLimb(B["sn" + k], kn, an);
+        setLimb(B["sock" + k], _a.copy(kn).lerp(an, 0.8), _c.copy(an).setY(0.05));
         const shoe = B["shoe" + k];
-        shoe.position.set(an.x + J.F[0] * 0.05, 0.03, an.z + J.F[2] * 0.05);
-        shoe.rotation.set(0, Math.atan2(J.F[0], J.F[2]), 0);
+        shoe.position.set(an.x + toe[0] * 0.055, 0.032, an.z + toe[2] * 0.055);
+        shoe.rotation.set(0, Math.atan2(toe[0], toe[2]), 0);
       }
-      B.handP.position.copy(racket.position).addScaledVector(_v.set(0, 1, 0).applyQuaternion(racket.quaternion), -0.13);
-      B.handP.quaternion.copy(racket.quaternion);
-      B.handF.position.set(J.wrF[0], J.wrF[1] + 0.012, J.wrF[2]);
-      B.handF.rotation.set(0, Math.atan2(J.F[0], J.F[2]), 0);
+      if (shirtOf !== sv.player && PLAYERS[sv.player]) {
+        shirtOf = sv.player;
+        mJersey.color.copy(C(PLAYERS[sv.player].shirt));
+      }
     }
     function makeArrow(color) {
       const mat = new T3.MeshBasicMaterial({ color: C(color) });
@@ -2033,8 +3429,8 @@ ol.steps em{font-style:normal;font-weight:700}
         y += (y - cy) / d * 16;
       }
       const wide = w > 1020;
-      x = clamp(x, (wide ? 296 : 0) + 64, w - (wide ? 310 : 0) - 64);
-      y = clamp(y, 112, h - 150);
+      x = clamp3(x, (wide ? 296 : 0) + 64, w - (wide ? 310 : 0) - 64);
+      y = clamp3(y, 112, h - 150);
       el.style.display = "block";
       el.style.left = x.toFixed(1) + "px";
       el.style.top = y.toFixed(1) + "px";
@@ -2046,8 +3442,9 @@ ol.steps em{font-style:normal;font-weight:700}
     trail.frustumCulled = false;
     scene.add(trail);
     let trailT = [], trailN = 0;
+    const PATH_N = 140;
     const pathGeo = new T3.BufferGeometry();
-    pathGeo.setAttribute("position", new T3.BufferAttribute(new Float32Array(120 * 3), 3));
+    pathGeo.setAttribute("position", new T3.BufferAttribute(new Float32Array(PATH_N * 3), 3));
     const swingPath = new T3.Line(pathGeo, new T3.LineBasicMaterial({ color: 16777215, transparent: true, opacity: 0.45 }));
     swingPath.frustumCulled = false;
     scene.add(swingPath);
@@ -2075,12 +3472,12 @@ ol.steps em{font-style:normal;font-weight:700}
       }
       trailGeo.attributes.position.needsUpdate = true;
       const pp = pathGeo.attributes.position.array;
-      const t0 = -sv.swing.T1, t1 = sv.swing.tDone;
-      for (let i = 0; i < 120; i++) {
-        const b = sv.racketAt(t0 + (t1 - t0) * i / 119).b;
-        pp[i * 3] = b[0];
-        pp[i * 3 + 1] = b[1];
-        pp[i * 3 + 2] = b[2];
+      const t0 = sv.tSwing0 - 0.02, t1 = sv.tSwingEnd + 0.02;
+      for (let i = 0; i < PATH_N; i++) {
+        const c = sv.racketAt(t0 + (t1 - t0) * i / (PATH_N - 1)).c;
+        pp[i * 3] = c[0];
+        pp[i * 3 + 1] = c[1];
+        pp[i * 3 + 2] = c[2];
       }
       pathGeo.attributes.position.needsUpdate = true;
       const bs = sv.events.filter((e) => e.type === "bounce");
@@ -2090,8 +3487,9 @@ ol.steps em{font-style:normal;font-weight:700}
           m.userData.t = bs[i].t;
         } else m.userData.t = Infinity;
       });
+      sv.pel0 = sv.body ? sv.body.at(0).pelvis : sv.pc;
     }
-    const EYE = new T3.Vector3(0, 1.36, 2.9);
+    const EYE2 = new T3.Vector3(0, 1.36, 2.9);
     let camAnim = null;
     controls.addEventListener("start", () => {
       camAnim = null;
@@ -2106,22 +3504,23 @@ ol.steps em{font-style:normal;font-weight:700}
       const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
       const wide = w > 1020, free = (w - (wide ? 296 + 310 : 0)) / 2 - 120;
       const f = h / 2 / Math.tan(camera.fov * DEG3 / 2);
-      const xs = (sv.pc[0] + (sv.body ? sv.body.layout.P[0] : sv.pc[0])) / 2;
+      const xs = (sv.pc[0] + (sv.pel0 ? sv.pel0[0] : sv.pc[0])) / 2;
       const off = Math.abs(xs) / 4.5 * f;
-      return off > free ? clamp(Math.sign(xs) * (off - free) * 4.1 / f, -0.9, 0.9) : 0;
+      return off > free ? clamp3(Math.sign(xs) * (off - free) * 4.1 / f, -0.9, 0.9) : 0;
     }
-    function setView(name, instant) {
+    function setView(name, instant, wide) {
       S.view = name;
       const sv = S.serve;
       const pc = sv ? V(sv.pc) : new T3.Vector3(0.35, 0.92, -1.5);
-      const toEye = EYE.clone().sub(pc).normalize();
+      const pel = sv && sv.pel0 ? sv.pel0 : null;
+      const toEye = EYE2.clone().sub(pc).normalize();
       let pos, tgt;
       if (name === "recv") {
-        pos = EYE.clone();
+        pos = EYE2.clone();
         recvAx = recvAim(sv);
         tgt = new T3.Vector3(recvAx, 0.95, -1.2);
       } else if (name === "close") {
-        const bx = sv && sv.body ? sv.body.layout.P[0] - pc.x : 0;
+        const bx = pel ? pel[0] - pc.x : 0;
         tgt = pc.clone().add(new T3.Vector3(bx * 0.35, 0.2, 0));
         pos = tgt.clone().addScaledVector(toEye, 1.95);
         pos.y += 0.05;
@@ -2129,29 +3528,44 @@ ol.steps em{font-style:normal;font-weight:700}
         const nn = sv ? V(sv.n) : new T3.Vector3(0, 0, 1);
         const bb = sv && sv.an && sv.an.brush ? V(sv.an.brush) : null;
         if (bb && bb.length() > 0.2) bb.normalize();
-        const bd = sv && sv.body ? new T3.Vector3(sv.body.layout.P[0] - pc.x, 0, sv.body.layout.P[2] - pc.z).normalize() : null;
+        const bd = pel ? new T3.Vector3(pel[0] - pc.x, 0, pel[2] - pc.z).normalize() : null;
         const eh = new T3.Vector3(toEye.x, 0, toEye.z).normalize();
+        const dist = wide ? 1.8 : 1;
+        tgt = pc.clone();
+        const J0 = sv && sv.body ? sv.body.at(0) : null;
+        if (wide && J0) tgt.lerp(V(J0.chest), 0.22);
+        const blockers = J0 ? [[J0.head, 0.13], [J0.chest, 0.16], [J0.shF, 0.08], [J0.shP, 0.08], [J0.elF, 0.06], [J0.wrF, 0.06], [J0.elP, 0.06], [J0.mid, 0.15]] : [];
         let best = null;
-        for (let az = -70; az <= 70; az += 14) for (const el of [0.04, 0.22, 0.45, 0.75]) {
+        for (let az = -80; az <= 80; az += 10) for (const el of [0.04, 0.2, 0.4, 0.65]) {
           const d = eh.clone().applyAxisAngle(UP, az * DEG3);
           d.y = el;
           d.normalize();
           let score = Math.max(Math.abs(d.dot(nn)), bb && bb.lengthSq() > 0.5 ? Math.abs(d.dot(bb)) : 0) + 4e-3 * Math.abs(az) + 0.15 * el;
           if (bd && d.dot(bd) > 0.35) score += 1;
+          _a.copy(tgt).addScaledVector(d, dist);
+          if (_a.y < P.tableY + 0.16) _a.y = P.tableY + 0.16;
+          for (const [p, r] of blockers) {
+            _b.set(p[0], p[1], p[2]);
+            _x.copy(pc).sub(_a);
+            const L2 = _x.lengthSq(), u = clamp3(_y.copy(_b).sub(_a).dot(_x) / L2, 0, 1);
+            const off = _y.copy(_a).addScaledVector(_x, u).distanceTo(_b);
+            if (off < r + 0.05 && u < 0.97) score += 0.8 + 2 * (r + 0.05 - off) / (r + 0.05);
+            const near = _b.distanceTo(_a);
+            if (near < 0.5 * dist) score += 2 * (0.5 * dist - near) / dist;
+          }
           if (!best || score < best.score) best = { d, score };
         }
-        tgt = pc.clone();
-        pos = pc.clone().addScaledVector(best.d, 0.95);
+        pos = tgt.clone().addScaledVector(best.d, dist);
         if (pos.y < P.tableY + 0.16) pos.y = P.tableY + 0.16;
       } else if (name === "side") {
-        const sgn = sv && sv.body ? Math.sign(sv.body.layout.P[0] - pc.x) || 1 : 1;
+        const sgn = pel ? Math.sign(pel[0] - pc.x) || 1 : 1;
         pos = new T3.Vector3(-5.6 * sgn, 1.5, -0.2);
         tgt = new T3.Vector3(0, 0.9, -0.2);
       } else if (name === "top") {
         tgt = new T3.Vector3(0, 0.76, -0.4);
         pos = new T3.Vector3(0, 8.9, -0.38);
       } else {
-        _v.copy(EYE).sub(ballPos);
+        _v.copy(EYE2).sub(ballPos);
         _v.y = Math.max(_v.y, 0.12);
         _v.normalize();
         pos = ballPos.clone().addScaledVector(_v, 0.3);
@@ -2176,13 +3590,20 @@ ol.steps em{font-style:normal;font-weight:700}
       const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
-      camera.fov = clamp(36 * 1.55 / camera.aspect, 36, 50);
+      camera.fov = clamp3(36 * 1.55 / camera.aspect, 36, 50);
       inset();
     }
     window.addEventListener("resize", resize);
     if (window.ResizeObserver) new ResizeObserver(resize).observe($("#app"));
     const qShow = new T3.Quaternion();
     const reviewing = () => S.mode === "lab" || S.phase === "review";
+    function ballGoneAt(sv) {
+      const w = S.set.watch;
+      if (w === "racket") return 0.03;
+      if (w === "net" && sv.verdict.net) return sv.verdict.net.t + 0.01;
+      return sv.arrive ? sv.arrive.t + 4e-3 : sv.tEnd;
+    }
+    const playEndOf = (sv) => Math.min(sv.tEnd, Math.max(ballGoneAt(sv) + 0.2, sv.tSwingEnd + 0.4));
     function axesFor(b) {
       if (Math.hypot(b.v[0], b.v[2]) > 0.15) {
         const sp = spinParts(b.w, b.v);
@@ -2195,10 +3616,7 @@ ol.steps em{font-style:normal;font-weight:700}
       const b = sv.ballAt(t);
       const rv = reviewing();
       let hideBall = false;
-      if (!rv) {
-        if (S.set.watch === "racket" && t > 0.03) hideBall = true;
-        if (S.phase === "ask" && !S.playing) hideBall = true;
-      }
+      if (!rv && t > ballGoneAt(sv)) hideBall = true;
       ballPos.set(b.p[0], b.p[1], b.p[2]);
       ballPivot.position.copy(ballPos);
       ballPivot.visible = !hideBall;
@@ -2220,18 +3638,16 @@ ol.steps em{font-style:normal;font-weight:700}
           _q.setFromAxisAngle(_v.set(wd[0] / m, wd[1] / m, wd[2] / m), m * dt * slow);
           qShow.premultiply(_q);
         }
-      } else if (S.playing && rv) blur = clamp((wl * dt * S.rate - 0.7) / 1.3, 0, 0.82);
+      } else if (S.playing && rv) blur = clamp3((wl * dt * S.rate - 0.7) / 1.3, 0, 0.82);
       ballMesh.quaternion.copy(qShow);
       ballBlur.material.opacity = blur;
       ballBlur.visible = blur > 0.01;
       S.lastT = t;
       const pz = sv.racketAt(t);
-      const face = TYPES[sv.type].face;
-      const zw = qRot(pz.q, [0, 0, face]);
       racket.quaternion.set(pz.q[0], pz.q[1], pz.q[2], pz.q[3]);
-      racket.position.set(pz.b[0] - zw[0] * 55e-4, pz.b[1] - zw[1] * 55e-4, pz.b[2] - zw[2] * 55e-4);
+      racket.position.set(pz.c[0], pz.c[1], pz.c[2]);
       body.visible = !!sv.body;
-      if (sv.body) updateBody(sv, t, pz.q);
+      if (sv.body) updateBody(sv, t);
       const showTr = rv && S.trail && trailN > 1;
       const whole = S.mode === "lab" && !S.playing && t <= 2e-3;
       trail.visible = showTr;
@@ -2318,7 +3734,7 @@ ol.steps em{font-style:normal;font-weight:700}
       const set = (id, c, pos, neg) => {
         const r = c / RPS;
         $("#val" + id).innerHTML = S.t < 0 ? "\u2014" : `${Math.abs(r).toFixed(1)}<small>\u8F6C/\u79D2</small>`;
-        const w = clamp(Math.abs(r) / 60, 0, 1) * 50;
+        const w = clamp3(Math.abs(r) / 60, 0, 1) * 50;
         const el = $("#bar" + id);
         el.style.width = (S.t < 0 ? 0 : w) + "%";
         el.style.left = r >= 0 ? "50%" : 50 - w + "%";
@@ -2343,43 +3759,55 @@ ol.steps em{font-style:normal;font-weight:700}
       if (Math.abs(z) > 0.33) out.push(z > 0 ? "\u671D\u4F60\u8FD9\u8FB9" : "\u5F80\u4ED6\u81EA\u5DF1\u90A3\u8FB9");
       return out.join("\u3001") || "\u51E0\u4E4E\u6CA1\u52A8";
     };
+    const clsName = (sv, cls = sv.cls) => (sv.kind === "pure" ? { top: "\u4E0A\u65CB", back: "\u4E0B\u65CB", flat: "\u4E0D\u8F6C" } : { top: "\u4FA7\u4E0A", back: "\u4FA7\u4E0B", flat: "\u4E0D\u8F6C" })[cls];
+    const FAKE_TXT = { lift: '\u89E6\u7403\u4E4B\u540E\u62CD\u5B50\u5F80\u4E0A\u4E00\u63D0\uFF0C\u662F\u88C5\u51FA\u6765\u7684"\u5F80\u4E0A\u8E6D"', chop: '\u89E6\u7403\u4E4B\u540E\u62CD\u5B50\u5F80\u4E0B\u4E00\u5207\uFF0C\u662F\u88C5\u51FA\u6765\u7684"\u5F80\u4E0B\u8E6D"', tuck: "\u89E6\u7403\u4E4B\u540E\u9A6C\u4E0A\u628A\u62CD\u5B50\u6536\u56DE\u8EAB\u524D\uFF0C\u4E0D\u8BA9\u4F60\u591A\u770B" };
     function explainHtml(sv) {
       if (!sv.col) return "<li><b>\u6CA1\u78B0\u5230\u7403</b>\u62CD\u9762\u662F\u80CC\u7740\u7403\u8D70\u7684\uFF0C\u62CD\u5B50\u548C\u7403\u9519\u5F00\u4E86\u3002</li>";
       const a = sv.an, out = [];
       const o = a.openDeg;
-      let face = o >= 75 ? "\u51E0\u4E4E\u653E\u5E73\uFF0C\u62CD\u9762\u671D\u5929" : o >= 45 ? "\u540E\u4EF0\u5F97\u5F88\u591A" : o >= 20 ? "\u660E\u663E\u540E\u4EF0" : o >= 6 ? "\u7A0D\u5FAE\u540E\u4EF0\uFF0C\u63A5\u8FD1\u7ACB\u7740" : o > -6 ? "\u7ACB\u7740" : "\u538B\u7740\u62CD";
-      face += `\uFF08${o >= 0 ? "\u540E\u4EF0" : "\u524D\u503E"} ${Math.abs(o).toFixed(0)}\xB0\uFF09`;
-      if (Math.abs(a.yawDeg) >= 12 && o < 75) face += `\uFF0C\u62CD\u9762\u504F\u5411\u4F60\u7684${a.yawDeg > 0 ? "\u53F3" : "\u5DE6"}\u8FB9`;
-      out.push(`<li><b>\u62CD\u9762</b>${face}\u3002</li>`);
+      let face = o >= 75 ? "\u51E0\u4E4E\u653E\u5E73\u3001\u671D\u5929" : o >= 45 ? "\u540E\u4EF0\u5F97\u5F88\u591A" : o >= 20 ? "\u660E\u663E\u540E\u4EF0" : o >= 6 ? "\u7A0D\u5FAE\u540E\u4EF0" : o > -6 ? "\u7ACB\u7740" : "\u524D\u503E\uFF08\u538B\u7740\u62CD\uFF09";
+      face += `\uFF08${Math.abs(o).toFixed(0)}\xB0\uFF09`;
+      if (Math.abs(a.yawDeg) >= 12 && o < 75) face += `\u3001\u504F\u5411\u4F60\u7684${a.yawDeg > 0 ? "\u53F3" : "\u5DE6"}\u8FB9`;
       const u = a.spotUp;
       let sp = u < -0.87 ? "\u7403\u7684\u5E95\u90E8" : u < -0.5 ? "\u7403\u7684\u540E\u4E0B\u65B9" : u < -0.17 ? "\u7403\u7684\u540E\u9762\u504F\u4E0B" : u < 0.17 ? "\u7403\u7684\u6B63\u540E\u9762" : "\u7403\u7684\u540E\u4E0A\u65B9";
-      if (a.spotSide > 0.25) sp += "\u3001\u504F\u4F60\u7684\u53F3\u624B\u8FB9";
-      else if (a.spotSide < -0.25) sp += "\u3001\u504F\u4F60\u7684\u5DE6\u624B\u8FB9";
-      out.push(`<li><b>\u78B0\u5230\u54EA\u513F</b>\u62CD\u5B50\u8D34\u5728${sp}\u3002</li>`);
+      if (a.spotSide > 0.25) sp += "\u504F\u4F60\u7684\u53F3\u624B\u8FB9";
+      else if (a.spotSide < -0.25) sp += "\u504F\u4F60\u7684\u5DE6\u624B\u8FB9";
+      let zone = "";
+      if (sv.body) zone = a.off[1] > 0.02 ? '\uFF0C\u7528\u7684\u662F<b class="in">\u62CD\u5934\u90A3\u4E00\u7AEF</b>\uFF08\u6325\u8D77\u6765\u90A3\u513F\u8D70\u5F97\u6700\u5FEB\uFF09' : a.off[1] < -0.012 ? '\uFF0C\u7528\u7684\u662F<b class="in">\u9760\u8FD1\u62CD\u67C4\u7684\u5730\u65B9</b>\uFF08\u90A3\u513F\u8D70\u5F97\u6162\uFF0C\u8E6D\u51FA\u6765\u7684\u65CB\u8F6C\u5C11\uFF09' : "";
+      let head = "";
+      if (a.head) {
+        const y = a.head[1];
+        head = y < -0.6 ? "\u62CD\u5934\u671D\u4E0B" : y < -0.25 ? "\u62CD\u5934\u659C\u671D\u4E0B" : y < 0.25 ? "\u62CD\u5934\u6A2A\u7740" : y < 0.6 ? "\u62CD\u5934\u659C\u671D\u4E0A" : "\u62CD\u5934\u671D\u4E0A";
+      }
+      out.push(`<li><b>\u62CD\u9762</b>${face}\uFF0C\u8D34\u5728${sp}${zone}\u3002${head ? `<i>\u8FD9\u4E00\u7403${head}\u3002\u62CD\u5934\u6307\u54EA\u513F\u4E0D\u5F71\u54CD\u65CB\u8F6C\uFF0C\u53EA\u770B\u62CD\u9762\u671D\u54EA\u3001\u5F80\u54EA\u8E6D\u3002</i>` : ""}</li>`);
       const bs = Math.hypot(a.brush[0], a.brush[1], a.brush[2]);
-      out.push(`<li><b>\u600E\u4E48\u8E6D\u7684</b>\u62CD\u5B50\u8D34\u7740\u7403${dirWord(a.brush)}\u8E6D\u8FC7\u53BB\uFF0C${bs.toFixed(1)} m/s\uFF08<span class="cb">\u9EC4\u7BAD\u5934</span>\uFF09\u3002</li>`);
+      const thick = bs > 1.7 * a.push ? "\u8E6D\u5F97\u8584\uFF0C\u4E3B\u8981\u9760\u6469\u64E6\u3002" : bs < 0.75 * a.push ? "\u9876\u5F97\u591A\u3001\u8E6D\u5F97\u5C11\uFF0C\u7403\u4E3B\u8981\u662F\u88AB\u649E\u51FA\u53BB\u7684\u3002" : "";
       const L = sv.launch, tp = L.top / RPS, sd = L.side / RPS, ck = L.cork / RPS;
       const va = a.relAlong, vs = Math.sqrt(Math.max(0, bs * bs - va * va));
-      const flatFace = o >= 55;
       const split = Math.abs(va) > 0.1 * bs && vs > 0.1 * bs;
-      const red = split ? '\uFF08<span class="cx">\u7EA2\u7BAD\u5934</span>\uFF09' : "", green = split ? '\uFF08<span class="cy">\u7EFF\u7BAD\u5934</span>\uFF09' : "";
-      let upTxt;
-      if (Math.abs(tp) < 6) upTxt = `\u987A\u7740\u62CD\u9762\u4E0A\u4E0B\u7684\u90A3\u4EFD\u53EA\u6709 ${Math.abs(va).toFixed(1)} m/s\uFF0C\u51E0\u4E4E\u6CA1\u8E6D\u5230\uFF0C\u6240\u4EE5\u79BB\u62CD\u65F6<span class="cx">${Math.abs(tp) < 1.5 ? "\u6CA1\u6709\u4E0A\u4E0B\u65CB" : `\u53EA\u6709\u4E00\u70B9${tp > 0 ? "\u4E0A" : "\u4E0B"}\u65CB\uFF08${Math.abs(tp).toFixed(0)}\uFF09`}</span>`;
-      else if (tp > 0) upTxt = `\u987A\u7740\u62CD\u9762<b class="in">\u5F80\u4E0A</b>\u7684\u90A3\u4EFD ${va.toFixed(1)} m/s${red}\u8E6D\u51FA<span class="cx">\u4E0A\u65CB ${tp.toFixed(0)}</span>`;
-      else upTxt = `\u987A\u7740\u62CD\u9762<b class="in">\u5F80\u4E0B</b>\u7684\u90A3\u4EFD ${Math.abs(va).toFixed(1)} m/s${red}\u8E6D\u51FA<span class="cx">\u4E0B\u65CB ${Math.abs(tp).toFixed(0)}</span>${flatFace ? '\u3002\u62CD\u9762\u8FD9\u4E48\u5E73\uFF0C"\u5F80\u4E0B"\u770B\u4E0A\u53BB\u5C31\u662F\u671D\u4F60\u8FD9\u8FB9\u9001' : ""}`;
-      if (a.racketAlong < -0.3 && va > 0.3 && tp >= 6) upTxt += "\u3002\u62CD\u5B50\u81EA\u5DF1\u662F\u5F80\u4E0B\u8D70\u7684\uFF0C\u4F46\u7403\u843D\u5F97\u66F4\u5FEB\uFF0C\u76F8\u5BF9\u7403\u6765\u8BF4\u62CD\u5B50\u5728\u5F80\u4E0A\u8E6D";
+      const red = split ? '<span class="cx">\uFF08\u7EA2\uFF09</span>' : "", green = split ? '<span class="cy">\uFF08\u7EFF\uFF09</span>' : "";
+      let upTxt, note = "";
+      if (Math.abs(tp) < 6) upTxt = `\u4E0A\u4E0B\u65B9\u5411\u53EA\u8E6D\u4E86 ${Math.abs(va).toFixed(1)}\uFF0C\u79BB\u62CD\u65F6<span class="cx">${Math.abs(tp) < 1.5 ? "\u6CA1\u6709\u4E0A\u4E0B\u65CB" : `\u53EA\u6709\u4E00\u70B9${tp > 0 ? "\u4E0A" : "\u4E0B"}\u65CB\uFF08${Math.abs(tp).toFixed(0)} \u8F6C/\u79D2\uFF09`}</span>`;
+      else if (tp > 0) upTxt = `\u987A\u7740\u62CD\u9762<b class="in">\u5F80\u4E0A</b>\u8E6D ${va.toFixed(1)}${red} \u2192 <span class="cx">\u4E0A\u65CB ${tp.toFixed(0)} \u8F6C/\u79D2</span>`;
+      else upTxt = `\u987A\u7740\u62CD\u9762<b class="in">\u5F80\u4E0B</b>\u8E6D ${Math.abs(va).toFixed(1)}${red} \u2192 <span class="cx">\u4E0B\u65CB ${Math.abs(tp).toFixed(0)} \u8F6C/\u79D2</span>`;
+      if (tp <= -6 && o >= 55) note = '\u62CD\u9762\u5F88\u5E73\uFF0C"\u5F80\u4E0B\u8E6D"\u770B\u4E0A\u53BB\u5C31\u662F\u671D\u4F60\u8FD9\u8FB9\u9001\u3002';
+      else if (a.racketAlong < -0.3 && va > 0.3 && tp >= 6) note = "\u62CD\u5B50\u81EA\u5DF1\u5728\u5F80\u4E0B\u8D70\uFF0C\u4F46\u7403\u843D\u5F97\u66F4\u5FEB\uFF0C\u76F8\u5BF9\u7403\u8FD8\u662F\u5F80\u4E0A\u8E6D\u3002";
       let sideTxt = "";
       if (Math.abs(sd) >= 3 || Math.abs(ck) >= 6) {
-        sideTxt = `\uFF1B\u6A2A\u7740\u7684\u90A3\u4EFD ${vs.toFixed(1)} m/s${green}\u8E6D\u51FA<span class="cy">\u4FA7\u65CB ${Math.abs(sd).toFixed(0)}</span>`;
-        if (Math.abs(ck) >= 6) sideTxt += `\uFF0C\u62CD\u9762\u4E0D\u662F\u7ACB\u7740\u7684\uFF0C\u6240\u4EE5\u5176\u4E2D\u4E00\u90E8\u5206\u6210\u4E86<span class="cz">\u87BA\u65CB ${Math.abs(ck).toFixed(0)}</span>`;
+        sideTxt = `\uFF1B\u6A2A\u7740\u8E6D ${vs.toFixed(1)}${green} \u2192 <span class="cy">\u4FA7\u65CB ${Math.abs(sd).toFixed(0)}</span>`;
+        if (Math.abs(ck) >= 6) sideTxt += `\u3001<span class="cz">\u87BA\u65CB ${Math.abs(ck).toFixed(0)}</span>`;
       }
-      out.push(`<li><b>\u62C6\u5F00\u770B</b>${upTxt}${sideTxt}\u3002\uFF08\u5355\u4F4D\uFF1A\u8F6C/\u79D2\uFF09</li>`);
+      out.push(`<li><b>\u600E\u4E48\u8E6D\u7684</b>\u8D34\u7740\u7403${dirWord(a.brush)}\u8E6D ${bs.toFixed(1)} m/s\uFF08<span class="cb">\u9EC4\u7BAD\u5934</span>\uFF09\uFF0C\u540C\u65F6\u671D\u7403\u91CC\u9876 ${a.push.toFixed(1)} m/s\u3002${thick}<br>${upTxt}${sideTxt}\u3002${note ? `<i>${note}</i>` : ""}</li>`);
       if (sv.arrive) {
         const R = sv.arrive.top / RPS, d = R - tp;
-        const res = Math.abs(R) < TH_RPS ? "\u51E0\u4E4E\u6CA1\u6709\u4E0A\u4E0B\u65CB" : (R > 0 ? "\u4E0A\u65CB " : "\u4E0B\u65CB ") + Math.abs(R).toFixed(0);
-        const tbl = d > 1 ? `\u6BCF\u6B21\u843D\u53F0\u90FD\u88AB\u53F0\u9762\u5F80\u4E0A\u65CB\u65B9\u5411\u5E26\u4E00\u70B9\uFF08\u8FD9\u7403\u4E00\u5171 ${d.toFixed(0)}\uFF09` : d < -1 ? `\u4E0A\u65CB\u592A\u5F3A\uFF0C\u843D\u53F0\u65F6\u53CD\u88AB\u53F0\u9762\u78E8\u6389 ${(-d).toFixed(0)}` : "\u8FD9\u7403\u843D\u53F0\u51E0\u4E4E\u6CA1\u6539\u53D8\u4E0A\u4E0B\u65CB";
-        out.push(`<li><b>\u5230\u4F60\u9762\u524D</b>\u7403\u5728\u4ED6\u90A3\u8FB9\u843D\u4E00\u6B21\u3001\u4F60\u8FD9\u8FB9\u843D\u4E00\u6B21\uFF0C${tbl}\uFF0C\u5230\u4F60\u9762\u524D\u662F<em class="${R >= TH_RPS ? "up" : R <= -TH_RPS ? "dn" : ""}">${res}</em>\u3002${sv.fake ? "\u89E6\u7403\u4E4B\u540E\u53CD\u7740\u6536\u62CD\u7684\u90A3\u4E00\u4E0B\u662F\u5047\u52A8\u4F5C\uFF0C\u4E0D\u7B97\u6570\u3002" : ""}</li>`);
+        const res = Math.abs(R) < TH_RPS ? "\u57FA\u672C\u4E0D\u8F6C" : (R > 0 ? "\u4E0A\u65CB " : "\u4E0B\u65CB ") + Math.abs(R).toFixed(0);
+        const tbl = d > 1 ? `\u843D\u4E24\u6B21\u53F0\uFF0C\u53F0\u9762\u628A\u5B83\u5F80\u4E0A\u65CB\u65B9\u5411\u5E26\u4E86 ${d.toFixed(0)}` : d < -1 ? `\u4E0A\u65CB\u592A\u5F3A\uFF0C\u843D\u53F0\u65F6\u88AB\u53F0\u9762\u78E8\u6389 ${(-d).toFixed(0)}` : "\u843D\u4E24\u6B21\u53F0\uFF0C\u4E0A\u4E0B\u65CB\u51E0\u4E4E\u6CA1\u53D8";
+        let extra = "";
+        if (sv.dead) extra = '\u8FD9\u662F"\u9876"\u51FA\u6765\u7684\u7403\uFF1A\u79BB\u62CD\u51E0\u4E4E\u4E0D\u8F6C\uFF0C\u843D\u53F0\u540E\u81EA\u5DF1\u5F80\u524D\u6EDA\u3002\u62FF\u6413\u4E0B\u65CB\u7684\u624B\u578B\u53BB\u78B0\u4F1A\u5192\u9AD8\u3002';
+        else if (sv.cls === "flat") extra = "\u5F80\u4E0B\u8E6D\u4E86\uFF0C\u4F46\u4E0D\u591F\u591A\uFF0C\u4E0B\u65CB\u5728\u53F0\u9762\u4E0A\u78E8\u5149\u4E86\u3002\u4E0D\u5230 5 \u8F6C/\u79D2\u5C31\u7B97\u4E0D\u8F6C\u3002";
+        out.push(`<li><b>\u5230\u4F60\u9762\u524D</b>${tbl}\uFF0C\u5230\u4F60\u9762\u524D\u662F<em class="${R >= TH_RPS ? "up" : R <= -TH_RPS ? "dn" : ""}">${res}</em>\u3002${extra}</li>`);
       } else out.push(`<li><b>\u8FD9\u7403</b>${sv.verdict.why}\u3002</li>`);
+      if (sv.fakeKind) out.push(`<li><b>\u5047\u52A8\u4F5C</b>${FAKE_TXT[sv.fakeKind]}\u3002\u90A3\u662F\u7403\u79BB\u62CD\u4E4B\u540E\u7684\u4E8B\uFF0C\u4E0D\u7B97\u6570\u3002</li>`);
       return out.join("");
     }
     let serveId = 0;
@@ -2393,17 +3821,19 @@ ol.steps em{font-style:normal;font-weight:700}
     function makeServe() {
       const s = S.set;
       const types = TYPE_KEYS.filter((k) => s.types[k]);
+      const kinds = ["side", "pure"].filter((k) => s.kinds[k]);
       const ps = [-1, 0, 1].filter((_, i) => s.pos[i]), ls = ["short", "long"].filter((_, i) => s.len[i]);
       for (let k = 0; k < 10; k++) {
         const r = Math.random();
-        const intent = s.choices === 3 ? r < 0.4 ? "top" : r < 0.8 ? "back" : "flat" : r < 0.5 ? "top" : "back";
+        const intent = s.choices === 3 ? r < 0.38 ? "top" : r < 0.76 ? "back" : "flat" : r < 0.5 ? "top" : "back";
         const cfg = {
           type: pick(types.length ? types : TYPE_KEYS),
+          kind: pick(kinds.length ? kinds : ["side"]),
           hand: s.hand,
           intent,
           pos: pick(ps.length ? ps : [-1, 0, 1]),
           len: pick(ls.length ? ls : ["short", "long"]),
-          style: s.style === "random" ? void 0 : s.style,
+          player: s.player === "random" ? void 0 : s.player,
           fake: s.fake === "all" || s.fake === "some" && Math.random() < 0.45
         };
         const sv = generateServe(cfg);
@@ -2428,6 +3858,7 @@ ol.steps em{font-style:normal;font-weight:700}
       S.t = sv.tStart;
       S.playing = false;
       S.stopAt = null;
+      S.auto = null;
       S.iso = "all";
       S.spinView = false;
       backToHome(true);
@@ -2440,22 +3871,26 @@ ol.steps em{font-style:normal;font-weight:700}
       const v = special ? S.home : S.view;
       if (special || newServe && (v === "close" || v === "side" || v === "recv" && Math.abs(recvAim(S.serve) - recvAx) > 0.03)) setView(v);
     }
-    function playServe() {
-      if (S.dirty || !S.serve) {
-        if (!nextServe()) return;
-      }
+    function runPlay() {
       const sv = S.serve;
       S.phase = "play";
       S.t = sv.tStart + 0.25;
       S.rate = S.set.speed;
       S.playing = true;
-      S.stopAt = null;
+      S.stopAt = playEndOf(sv);
+      S.auto = null;
       S.live = null;
-      S.answer = null;
       S.spinView = false;
       backToHome(false);
       syncUI();
       renderStage();
+    }
+    function playServe() {
+      if (S.dirty || !S.serve) {
+        if (!nextServe()) return;
+      }
+      S.answer = null;
+      runPlay();
     }
     function onPlayEnd() {
       if (S.mode === "practice" && S.phase === "play") {
@@ -2464,21 +3899,30 @@ ol.steps em{font-style:normal;font-weight:700}
       }
       syncTransport();
     }
+    function autoRate(sv, t) {
+      if (t < -0.07) return 0.2;
+      if (t < 0.05) return 0.05;
+      if (t < sv.tSwingEnd + 0.1) return 0.2;
+      return 0.5;
+    }
     function showContact(replay) {
       const sv = S.serve;
       if (!sv) return;
       S.spinView = false;
       S.iso = "all";
-      setView("contact");
       if (replay) {
-        S.t = -0.22;
-        S.rate = 0.1;
+        setView("contact", false, true);
+        S.t = Math.max(sv.tStart, sv.tSwing0 - 0.2);
         S.playing = true;
-        S.stopAt = 0;
+        S.stopAt = null;
+        S.auto = { cam: true };
+        S.rate = autoRate(sv, S.t);
       } else {
+        setView("contact");
         S.t = 0;
         S.playing = false;
         S.stopAt = null;
+        S.auto = null;
       }
       syncUI();
     }
@@ -2487,10 +3931,12 @@ ol.steps em{font-style:normal;font-weight:700}
       if (!sv) return;
       S.playing = false;
       S.stopAt = null;
+      S.auto = null;
       if (at !== void 0) S.t = Math.min(sv.tEnd, at);
       else if (sv.arrive) S.t = Math.min(sv.tEnd, sv.arrive.t + 0.05);
       else if (S.t < 0.05) S.t = Math.min(sv.tEnd, 0.08);
       S.spinView = true;
+      $("#spinMore").open = true;
       const b = sv.ballAt(S.t);
       ballPos.set(b.p[0], b.p[1], b.p[2]);
       setView("ball");
@@ -2499,19 +3945,23 @@ ol.steps em{font-style:normal;font-weight:700}
     function answer(a) {
       const sv = S.serve;
       if (!sv || S.answer || S.phase !== "play" && S.phase !== "ask" || S.t < 0) return;
+      const tn = sv.verdict.net ? sv.verdict.net.t : 1e9, ta = sv.arrive ? sv.arrive.t : 1e9;
+      S.ansWhen = S.phase === "ask" || S.t >= ta ? "\u7403\u843D\u5230\u4F60\u8FD9\u8FB9\u4E4B\u540E\u624D\u5224\u65AD\u7684\uFF0C\u5B9E\u6218\u91CC\u8FD9\u65F6\u5019\u8BE5\u51FA\u624B\u4E86" : S.t < tn ? "\u7403\u8FC7\u7F51\u4E4B\u524D\u5C31\u5224\u65AD\u4E86" : "\u7403\u8FC7\u4E86\u7F51\u3001\u8FD8\u6CA1\u843D\u53F0\u65F6\u5224\u65AD\u7684";
       S.answer = a;
       S.phase = "review";
       renderStage();
       showContact(true);
     }
     function describe(sv) {
-      const c = sv.cfg || {};
-      return `${TYPES[sv.type].short}${sv.hand < 0 ? "\uFF08\u5DE6\u624B\uFF09" : ""} \xB7 ${c.len === "short" ? "\u8FD1" : "\u8FDC"}${sv.fake ? " \xB7 \u6709\u5047\u52A8\u4F5C" : ""}`;
+      const c = sv.cfg || {}, pl = PLAYERS[sv.player];
+      return `${pl ? pl.name + " \xB7 " : ""}${TYPES[sv.type].short}${sv.hand < 0 ? "\uFF08\u5DE6\u624B\uFF09" : ""} \xB7 ${c.len === "short" ? "\u8FD1" : "\u8FDC"}${sv.fake ? " \xB7 \u6709\u5047\u52A8\u4F5C" : ""}`;
     }
     function brief(sv) {
       const o = sv.an.openDeg, tp = sv.launch.top / RPS;
       const face = o >= 6 ? `\u62CD\u9762\u540E\u4EF0 ${o.toFixed(0)}\xB0` : o > -6 ? "\u62CD\u9762\u7ACB\u7740" : `\u62CD\u9762\u524D\u503E ${(-o).toFixed(0)}\xB0`;
+      if (sv.dead) return `${face}\uFF0C\u662F\u9876\u51FA\u6765\u7684\uFF1A\u4E0A\u4E0B\u65B9\u5411\u51E0\u4E4E\u6CA1\u8E6D\uFF0C\u843D\u53F0\u540E\u81EA\u5DF1\u5F80\u524D\u6EDA`;
       if (Math.abs(tp) < 6) return `${face}\uFF0C\u4E0A\u4E0B\u65B9\u5411\u51E0\u4E4E\u6CA1\u8E6D${sv.cls === "top" ? "\uFF0C\u843D\u53F0\u540E\u624D\u5E26\u4E0A\u4E0A\u65CB" : ""}`;
+      if (sv.cls === "flat") return `${face}\uFF0C\u5F80\u4E0B\u8E6D\u4E86\u4F46\u4E0D\u591F\u591A\uFF0C\u5230\u4F60\u9762\u524D\u5DF2\u7ECF\u78E8\u6CA1\u4E86`;
       return `${face}\uFF0C\u987A\u7740\u62CD\u9762\u5F80${tp > 0 ? "\u4E0A" : "\u4E0B"}\u8E6D`;
     }
     function renderStage() {
@@ -2521,7 +3971,7 @@ ol.steps em{font-style:normal;font-weight:700}
     function renderStageInner() {
       const st = $("#stage"), sv = S.serve;
       if (S.mode === "lab") {
-        st.innerHTML = `<div class="row"><button type="button" class="btn primary" data-act="labplay">\u64AD\u653E\u8FD9\u4E00\u7403</button><button type="button" class="btn" data-act="contact">\u770B\u89E6\u7403\u77AC\u95F4</button><button type="button" class="btn" data-act="spin">\u770B\u7403\u600E\u4E48\u8F6C</button><p class="hint" style="flex:1">\u62D6\u5DE6\u8FB9\u7684\u6ED1\u6746\uFF0C\u7403\u8DEF\u548C\u53F3\u8FB9\u7684\u8BB2\u89E3\u4F1A\u8DDF\u7740\u91CD\u7B97\u3002</p></div>`;
+        st.innerHTML = `<div class="row"><button type="button" class="btn primary" data-act="labplay">\u64AD\u653E\u8FD9\u4E00\u7403</button><button type="button" class="btn" data-act="hit">\u770B\u89E6\u7403\u77AC\u95F4</button><button type="button" class="btn" data-act="spin">\u770B\u7403\u600E\u4E48\u8F6C</button><p class="hint" style="flex:1">\u62D6\u5DE6\u8FB9\u7684\u6ED1\u6746\uFF0C\u7403\u8DEF\u548C\u53F3\u8FB9\u7684\u8BB2\u89E3\u4F1A\u8DDF\u7740\u91CD\u7B97\u3002</p></div>`;
         return;
       }
       if (!sv) {
@@ -2530,19 +3980,20 @@ ol.steps em{font-style:normal;font-weight:700}
       }
       if (S.phase === "ready") {
         st.innerHTML = `<div class="row"><button type="button" class="btn primary" data-act="serve">\u53D1\u7403<kbd>\u7A7A\u683C</kbd></button>
-        <p class="hint" style="flex:1">\u76EF\u4F4F\u89E6\u7403\u90A3\u4E00\u4E0B\u7684\u62CD\u578B\uFF1A\u62CD\u9762\u4EF0\u591A\u5C11\uFF0C\u62CD\u5B50\u8D34\u7740\u7403\u662F\u5F80\u4E0A\u8E6D\u8FD8\u662F\u5F80\u4E0B\u8E6D\u3002</p></div>`;
+        <p class="hint" style="flex:1">\u76EF\u4F4F\u89E6\u7403\u90A3\u4E00\u4E0B\u7684\u62CD\u578B\uFF1A\u62CD\u9762\u4EF0\u591A\u5C11\uFF0C\u62CD\u5B50\u8D34\u7740\u7403\u662F\u5F80\u4E0A\u8E6D\u8FD8\u662F\u5F80\u4E0B\u8E6D\u3002\u7403\u4E00\u843D\u5230\u4F60\u8FD9\u8FB9\u5C31\u770B\u4E0D\u5230\u4E86\u3002</p></div>`;
       } else if (S.phase === "play" || S.phase === "ask") {
-        const three = S.set.choices === 3;
+        const three = S.set.choices === 3, pure = S.set.kinds.pure, side = S.set.kinds.side;
+        const up = pure && side ? ["\u4E0A\u65CB", "\u4FA7\u4E0A\u4E5F\u7B97"] : pure ? ["\u4E0A\u65CB", ""] : ["\u4FA7\u4E0A", ""], dn = pure && side ? ["\u4E0B\u65CB", "\u4FA7\u4E0B\u4E5F\u7B97"] : pure ? ["\u4E0B\u65CB", ""] : ["\u4FA7\u4E0B", ""];
         st.innerHTML = `<div class="row"><div class="answers">
-          <button type="button" class="ans up" data-ans="top" disabled><b>\u4FA7\u4E0A</b><small>\u952E\u76D8 \u2191</small></button>
-          ${three ? '<button type="button" class="ans" data-ans="flat" disabled><b>\u4E0D\u8F6C</b><small>\u952E\u76D8 \u2192</small></button>' : ""}
-          <button type="button" class="ans down" data-ans="back" disabled><b>\u4FA7\u4E0B</b><small>\u952E\u76D8 \u2193</small></button>
+          <button type="button" class="ans up" data-ans="top" disabled><b>${up[0]}</b><small>${up[1] ? up[1] + " \xB7 " : ""}\u952E\u76D8 \u2191</small></button>
+          ${three ? '<button type="button" class="ans" data-ans="flat" disabled><b>\u4E0D\u8F6C</b><small>\u5230\u4F60\u9762\u524D\u57FA\u672C\u4E0D\u8F6C \xB7 \u952E\u76D8 \u2192</small></button>' : ""}
+          <button type="button" class="ans down" data-ans="back" disabled><b>${dn[0]}</b><small>${dn[1] ? dn[1] + " \xB7 " : ""}\u952E\u76D8 \u2193</small></button>
         </div><button type="button" class="btn" data-act="again">\u518D\u770B\u4E00\u904D</button></div>`;
         S.live = null;
       } else if (S.phase === "review") {
         const ok = S.answer === sv.cls;
-        st.innerHTML = `<div class="row"><div class="verdict ${ok ? "ok" : "no"}"><b>${ok ? "\u5BF9\u4E86" : "\u770B\u9519\u4E86"}\uFF0C\u662F${CLS[sv.cls]}</b><span>${brief(sv)}<i>${describe(sv)}</i></span></div>
-        <button type="button" class="btn" data-act="contact">\u518D\u770B\u89E6\u7403</button><button type="button" class="btn" data-act="spin">\u770B\u7403\u600E\u4E48\u8F6C</button><button type="button" class="btn primary" data-act="next">\u4E0B\u4E00\u7403<kbd>\u7A7A\u683C</kbd></button></div>`;
+        st.innerHTML = `<div class="row"><div class="verdict ${ok ? "ok" : "no"}"><b>${ok ? "\u5BF9\u4E86" : "\u770B\u9519\u4E86"}\uFF0C\u662F${clsName(sv)}</b><span>${brief(sv)}<i>${describe(sv)}</i><i>${S.ansWhen}</i></span></div>
+        <button type="button" class="btn" data-act="replay">\u6162\u653E\u91CD\u770B</button><button type="button" class="btn" data-act="spin">\u770B\u7403\u600E\u4E48\u8F6C</button><button type="button" class="btn primary" data-act="next">\u4E0B\u4E00\u7403<kbd>\u7A7A\u683C</kbd></button></div>`;
       }
     }
     $("#stage").addEventListener("click", (e) => {
@@ -2551,23 +4002,16 @@ ol.steps em{font-style:normal;font-weight:700}
       if (b.dataset.ans) return answer(b.dataset.ans);
       const act = b.dataset.act;
       if (act === "serve") playServe();
-      else if (act === "again") {
-        const sv = S.serve;
-        S.phase = "play";
-        S.t = sv.tStart + 0.25;
-        S.rate = S.set.speed;
-        S.playing = true;
-        S.stopAt = null;
-        S.live = null;
-        backToHome(false);
-        renderStage();
-      } else if (act === "next") {
+      else if (act === "again") runPlay();
+      else if (act === "next") {
         S.dirty = true;
         playServe();
-      } else if (act === "contact") showContact(true);
+      } else if (act === "replay") showContact(true);
+      else if (act === "hit") showContact(false);
       else if (act === "spin") showSpin();
       else if (act === "labplay") {
         S.spinView = false;
+        S.auto = null;
         S.t = S.serve.tStart + 0.3;
         S.rate = 0.25;
         S.playing = true;
@@ -2582,7 +4026,7 @@ ol.steps em{font-style:normal;font-weight:700}
       $("#transport").hidden = !reviewing();
       if (was !== $("#transport").hidden) inset();
       $("#btnPlay").textContent = S.playing ? "\u6682\u505C" : "\u64AD\u653E";
-      $$("#rateSeg button").forEach((b) => b.classList.toggle("on", Math.abs(parseFloat(b.dataset.rate) - S.rate) < 1e-6));
+      $$("#rateSeg button").forEach((b) => b.classList.toggle("on", !S.auto && Math.abs(parseFloat(b.dataset.rate) - S.rate) < 1e-6));
       $("#tgAids").classList.toggle("on", S.aids);
       $("#tgTrail").classList.toggle("on", S.trail);
     }
@@ -2597,6 +4041,7 @@ ol.steps em{font-style:normal;font-weight:700}
       if (!sv) return;
       S.playing = false;
       S.stopAt = null;
+      S.auto = null;
       S.t = sv.tStart + parseFloat(scrub.value) / 1e3 * (sv.tEnd - sv.tStart);
       syncTransport();
     });
@@ -2604,14 +4049,15 @@ ol.steps em{font-style:normal;font-weight:700}
       const sv = S.serve;
       if (!sv) return;
       S.stopAt = null;
-      if (!S.playing && S.t >= sv.tEnd - 1e-3) S.t = -0.3;
+      if (!S.playing && S.t >= sv.tEnd - 1e-3) S.t = Math.max(sv.tStart, sv.tSwing0 - 0.2);
       S.playing = !S.playing;
-      if (S.playing && S.view === "contact" && S.t >= -0.01) setView(S.mode === "lab" && S.home === "recv" ? "side" : S.home);
+      if (S.playing && S.view === "contact" && S.t >= sv.tSwingEnd && !S.auto) setView(S.mode === "lab" && S.home === "recv" ? "side" : S.home);
       syncTransport();
     });
     $("#rateSeg").addEventListener("click", (e) => {
       const b = e.target.closest("button");
       if (!b) return;
+      S.auto = null;
       S.rate = parseFloat(b.dataset.rate);
       syncTransport();
     });
@@ -2621,7 +4067,7 @@ ol.steps em{font-style:normal;font-weight:700}
       if (where === "hit") return showContact(false);
       if (where === "arrive") return showSpin();
       const b1 = sv.verdict.b1;
-      showSpin(clamp(b1 ? b1.t * 0.5 : 0.06, 0.012, 0.07));
+      showSpin(clamp3(b1 ? b1.t * 0.5 : 0.06, 0.012, 0.07));
     }
     $("#stageChips").addEventListener("click", (e) => {
       const b = e.target.closest("button");
@@ -2655,7 +4101,7 @@ ol.steps em{font-style:normal;font-weight:700}
       });
       return () => $$("button", root).forEach((b) => b.classList.toggle("on", String(get()) === b.dataset[attr]));
     };
-    const multiBind = (sel, attr, arrOrObj, keyOf) => {
+    const multiBind = (sel, attr, arrOrObj, keyOf, after) => {
       const root = $(sel);
       root.addEventListener("click", (e) => {
         const b = e.target.closest("button");
@@ -2664,6 +4110,7 @@ ol.steps em{font-style:normal;font-weight:700}
         const o = arrOrObj();
         o[k] = !o[k];
         if (!Object.values(o).some(Boolean)) o[k] = true;
+        if (after) after();
         touch();
         syncUI();
       });
@@ -2671,6 +4118,11 @@ ol.steps em{font-style:normal;font-weight:700}
     };
     const syncers = [
       multiBind("#typeChips", "type", () => S.set.types, (v) => v),
+      multiBind("#kindChips", "kind", () => S.set.kinds, (v) => v, () => {
+        custom();
+        if (S.set.kinds.pure) S.set.choices = 3;
+      }),
+      // "转与不转"就得分出不转
       multiBind("#posChips", "pos", () => S.set.pos, (v) => parseInt(v, 10)),
       multiBind("#lenChips", "len", () => S.set.len, (v) => parseInt(v, 10)),
       segBind("#handSeg", "hand", () => S.set.hand, (v) => {
@@ -2705,12 +4157,13 @@ ol.steps em{font-style:normal;font-weight:700}
       const b = e.target.closest("button");
       if (!b) return;
       const p = PRESETS[b.dataset.preset];
-      Object.assign(S.set, { preset: b.dataset.preset, fake: p.fake, choices: p.choices, speed: p.speed, watch: p.watch, style: p.style });
+      Object.assign(S.set, { preset: b.dataset.preset, kinds: { ...p.kinds }, fake: p.fake, choices: p.choices, speed: p.speed, watch: p.watch, player: p.player });
       touch();
       syncUI();
     });
-    $("#styleSel").addEventListener("change", (e) => {
-      S.set.style = e.target.value;
+    $("#playerSel").innerHTML = '<option value="random">\u6BCF\u7403\u968F\u673A\u6362\u4E00\u4E2A\u4EBA</option>' + PLAYER_KEYS.map((k) => `<option value="${k}">${PLAYERS[k].name}</option>`).join("");
+    $("#playerSel").addEventListener("change", (e) => {
+      S.set.player = e.target.value;
       custom();
       touch();
       syncUI();
@@ -2735,13 +4188,15 @@ ol.steps em{font-style:normal;font-weight:700}
       syncers.forEach((f) => f());
       $$("#presetChips button").forEach((b) => b.classList.toggle("on", b.dataset.preset === S.set.preset));
       $("#presetNote").textContent = PRESETS[S.set.preset] ? PRESETS[S.set.preset].note : "\u81EA\u5B9A\u4E49\uFF1A\u4E0B\u9762\u6BCF\u4E00\u9879\u90FD\u6309\u4F60\u9009\u7684\u6765\u3002";
-      $("#styleSel").value = S.set.style;
+      $("#playerSel").value = S.set.player;
+      $("#playerNote").textContent = S.set.player === "random" ? "\u7AD9\u59FF\u3001\u629B\u7403\u9AD8\u5EA6\u3001\u5F15\u62CD\u5927\u5C0F\u3001\u6536\u62CD\u65B9\u5F0F\u6BCF\u7403\u90FD\u6362\u3002" : PLAYERS[S.set.player].note + "\u3002";
       $$(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.mode === S.mode));
       $("#panelPractice").hidden = S.mode !== "practice";
       $("#panelLab").hidden = S.mode !== "lab";
       $("#readBody").hidden = !reviewing();
       $("#readLock").hidden = reviewing();
       $("#right").classList.toggle("locked", !reviewing());
+      $("#spinCtl").hidden = !S.spinView;
       $("#pending").hidden = !(S.mode === "practice" && S.dirty && S.phase !== "review");
       syncTransport();
     }
@@ -2774,7 +4229,7 @@ ol.steps em{font-style:normal;font-weight:700}
     $("#labSliders").innerHTML = LAB_SL.map(([k, name, mn, mx, stp]) => `<div class="sl"><label for="lab_${k}">${name}</label><output id="out_${k}"></output><input type="range" id="lab_${k}" min="${mn}" max="${mx}" step="${stp}"></div>`).join("");
     function syncLabSliders() {
       for (const [k, , mn, mx, stp, unit] of LAB_SL) {
-        const v = clamp(labGet(k), mn, mx);
+        const v = clamp3(labGet(k), mn, mx);
         labSet(k, v);
         $("#lab_" + k).value = v;
         $("#out_" + k).textContent = (stp >= 1 ? v.toFixed(0) : stp >= 0.1 ? v.toFixed(1) : v.toFixed(2)) + unit;
@@ -2788,13 +4243,14 @@ ol.steps em{font-style:normal;font-weight:700}
       S.phase = "lab";
       S.playing = false;
       S.stopAt = null;
+      S.auto = null;
       S.t = 0;
       S.spinView = false;
       const el = $("#labStatus");
       el.className = sv.legal ? "ok" : "bad";
-      el.textContent = sv.legal ? `\u5408\u6CD5\u53D1\u7403\uFF1A\u843D\u5728\u4F60\u8FD9\u8FB9\u79BB\u7F51 ${sv.verdict.b2.p[2].toFixed(2)} m\uFF0C\u8FC7\u7F51\u4F59\u91CF ${(sv.verdict.net.clear * 100).toFixed(1)} cm\uFF0C\u5230\u4F60\u9762\u524D\u662F${CLS[sv.cls]}` : `\u4E0D\u5408\u6CD5\uFF1A${sv.verdict.why}`;
+      el.textContent = sv.legal ? `\u5408\u6CD5\u53D1\u7403\uFF1A\u843D\u5728\u4F60\u8FD9\u8FB9\u79BB\u7F51 ${sv.verdict.b2.p[2].toFixed(2)} m\uFF0C\u8FC7\u7F51\u4F59\u91CF ${(sv.verdict.net.clear * 100).toFixed(1)} cm\uFF0C\u5230\u4F60\u9762\u524D\u662F${{ top: "\u4E0A\u65CB", back: "\u4E0B\u65CB", flat: "\u4E0D\u8F6C" }[sv.cls]}` : `\u4E0D\u5408\u6CD5\uFF1A${sv.verdict.why}`;
       renderStage();
-      syncTransport();
+      syncUI();
     }
     $("#labSliders").addEventListener("input", (e) => {
       const k = e.target.id.replace("lab_", "");
@@ -2808,7 +4264,7 @@ ol.steps em{font-style:normal;font-weight:700}
     });
     $$(".labEx").forEach((b) => b.addEventListener("click", () => {
       let sv = null;
-      for (let k = 0; k < 8 && !sv; k++) sv = generateServe({ type: S.lab.type, hand: 1, intent: b.dataset.ex, pos: 1, len: pick(["short", "long"]), style: "standard", fake: false });
+      for (let k = 0; k < 8 && !sv; k++) sv = generateServe({ type: S.lab.type, hand: 1, intent: b.dataset.ex, pos: 1, len: pick(["short", "long"]), player: "std", fake: false });
       if (!sv) return;
       Object.assign(S.lab, toLab(sv), { mu: P.rubber.mu, et: P.rubber.et0 });
       syncLabSliders();
@@ -2820,7 +4276,7 @@ ol.steps em{font-style:normal;font-weight:700}
       if (labSeeded) return;
       labSeeded = true;
       for (let k = 0; k < 8; k++) {
-        const sv = generateServe({ type: S.lab.type, hand: 1, intent: "back", pos: 1, len: "long", style: "standard", fake: false });
+        const sv = generateServe({ type: S.lab.type, hand: 1, intent: "back", pos: 1, len: "long", player: "std", fake: false });
         if (sv) {
           Object.assign(S.lab, toLab(sv));
           break;
@@ -2830,6 +4286,8 @@ ol.steps em{font-style:normal;font-weight:700}
     function setMode(m) {
       S.mode = m;
       S.spinView = false;
+      S.auto = null;
+      $("#spinMore").open = m === "lab";
       if (m === "lab") {
         seedLab();
         syncLabSliders();
@@ -2879,7 +4337,8 @@ ol.steps em{font-style:normal;font-weight:700}
         e.preventDefault();
         S.playing = false;
         S.stopAt = null;
-        S.t = clamp(S.t + (e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 0.02 : 2e-3), S.serve.tStart, S.serve.tEnd);
+        S.auto = null;
+        S.t = clamp3(S.t + (e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 0.02 : 2e-3), S.serve.tStart, S.serve.tEnd);
         syncTransport();
       }
     });
@@ -2890,15 +4349,23 @@ ol.steps em{font-style:normal;font-weight:700}
       const sv = S.serve;
       if (sv) {
         if (S.playing) {
+          if (S.auto) {
+            S.rate = autoRate(sv, S.t);
+            if (S.auto.cam && S.t > sv.tSwingEnd + 0.1 && !S.spinView) {
+              S.auto.cam = false;
+              setView(S.mode === "lab" && S.home === "recv" ? "side" : S.home);
+            }
+          }
           S.t += dt * S.rate;
           if (S.stopAt !== null && S.t >= S.stopAt) {
             S.t = S.stopAt;
             S.playing = false;
             S.stopAt = null;
-            syncTransport();
+            onPlayEnd();
           } else if (S.t >= sv.tEnd) {
             S.t = sv.tEnd;
             S.playing = false;
+            S.auto = null;
             onPlayEnd();
           }
         }
@@ -2934,6 +4401,7 @@ ol.steps em{font-style:normal;font-weight:700}
     resize();
     const m0 = location.hash === "#lab" ? "lab" : "practice";
     S.mode = m0;
+    $("#spinMore").open = m0 === "lab";
     if (m0 === "lab") {
       seedLab();
       syncLabSliders();
@@ -2972,6 +4440,7 @@ ol.steps em{font-style:normal;font-weight:700}
         S.answer = null;
         S.t = sv.tStart;
         S.playing = false;
+        S.auto = null;
         S.spinView = false;
         syncUI();
         renderStage();

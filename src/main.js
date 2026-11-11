@@ -1,6 +1,7 @@
 // main.js — 三维场景、练习流程、触球讲解、实验台
 import { P } from './physics.js';
-import { generateServe, manualServe, toLab, TYPES, TYPE_KEYS, RPS, TH_RPS, spinParts, qRot } from './serve.js';
+import { generateServe, manualServe, toLab, TYPES, TYPE_KEYS, PLAYERS, PLAYER_KEYS, RPS, TH_RPS, spinParts } from './serve.js';
+import { FINGER_RAD } from './skeleton.js';
 
 const T3 = window.THREE;
 const $ = (s, r = document) => r.querySelector(s);
@@ -10,19 +11,17 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
-const CLS = { top: '侧上', back: '侧下', flat: '不转' };
-const POSN = ['左边', '中间', '右边'];
 const PRESETS = {
-  basic: { fake: 'none', choices: 2, speed: 0.5, watch: 'both', style: 'standard', note: '半速播放，没有假动作，对手用同一种习惯发。先把拍型看明白。' },
-  mid: { fake: 'some', choices: 2, speed: 1, watch: 'both', style: 'random', note: '原速。对手每球换一种习惯，有时触球后反着收拍。' },
-  match: { fake: 'all', choices: 3, speed: 1, watch: 'both', style: 'random', note: '原速，每球都有假动作，还要分出"不转"。' },
+  basic: { kinds: { side: true, pure: false }, fake: 'none', choices: 2, speed: 0.5, watch: 'land', player: 'std', note: '半速，没有假动作，同一个人发，只分侧上 / 侧下。先把拍型看明白。' },
+  mid: { kinds: { side: true, pure: true }, fake: 'some', choices: 3, speed: 1, watch: 'land', player: 'random', note: '原速，每球换一个人发，有时触球后做假动作；加上不带侧旋的"转与不转"，要分出不转。' },
+  match: { kinds: { side: true, pure: true }, fake: 'all', choices: 3, speed: 1, watch: 'net', player: 'random', note: '原速，每球都有假动作，球一过网就看不到了：只能靠拍型和前半段球路。' },
 };
-const STORE = 'pp-spin-v2';
+const STORE = 'pp-spin-v3';
 
 const S = {
-  mode: 'practice', phase: 'ready', serve: null, t: 0, lastT: null, playing: false, rate: 1, stopAt: null,
-  answer: null, view: 'recv', home: 'recv', aids: true, trail: true, iso: 'all', spinView: false, spinRate: 0.45, dirty: false, live: null,
-  set: { preset: 'basic', types: { pendulum: true, reverse: true, hook: true, backhand: true }, hand: 1, pos: [true, true, true], len: [true, true], style: 'standard', fake: 'none', choices: 2, speed: 0.5, watch: 'both' },
+  mode: 'practice', phase: 'ready', serve: null, t: 0, lastT: null, playing: false, rate: 1, stopAt: null, auto: null,
+  answer: null, ansWhen: '', view: 'recv', home: 'recv', aids: true, trail: true, iso: 'all', spinView: false, spinRate: 0.45, dirty: false, live: null,
+  set: { preset: 'basic', types: { pendulum: true, reverse: true, hook: true, backhand: true }, kinds: { side: true, pure: false }, player: 'std', hand: 1, pos: [true, true, true], len: [true, true], fake: 'none', choices: 2, speed: 0.5, watch: 'land' },
   lab: { type: 'pendulum', hand: 1, xc: 0.35, zc: -1.5, hc: 0.16, vfall: 3.0, openDeg: 62, yawDeg: -14, vr: [1.6, -0.6, 4.4], mu: P.rubber.mu, et: P.rubber.et0 },
 };
 
@@ -33,6 +32,9 @@ function load(extra) {
     Object.assign(S.set, d.set);
     if (!Array.isArray(S.set.pos) || S.set.pos.length !== 3) S.set.pos = [true, true, true];
     if (!Array.isArray(S.set.len) || S.set.len.length !== 2) S.set.len = [true, true];
+    if (!S.set.kinds || (!S.set.kinds.side && !S.set.kinds.pure)) S.set.kinds = { side: true, pure: false };
+    if (S.set.player !== 'random' && !PLAYERS[S.set.player]) S.set.player = 'std';
+    if (!['land', 'net', 'racket'].includes(S.set.watch)) S.set.watch = 'land';
   } catch (e) { /* 没有存储也照常用 */ }
 }
 function save() {
@@ -72,6 +74,7 @@ function start(hot) {
   const UP = new T3.Vector3(0, 1, 0), ZAX = new T3.Vector3(0, 0, 1);
   const V = (a) => new T3.Vector3(a[0], a[1], a[2]);
   const _v = new T3.Vector3(), _v2 = new T3.Vector3(), _c = new T3.Vector3(), _c2 = new T3.Vector3(), _q = new T3.Quaternion(), _m = new T3.Matrix4();
+  const _a = new T3.Vector3(), _b = new T3.Vector3(), _x = new T3.Vector3(), _y = new T3.Vector3(), _z = new T3.Vector3();
   const std = (hex, rough = 0.8) => new T3.MeshStandardMaterial({ color: C(hex), roughness: rough });
 
   // --- 地面、挡板、球台、球网 ---
@@ -138,77 +141,105 @@ function start(hot) {
     const h = new T3.Mesh(new T3.BoxGeometry(0.029, 0.1, 0.023), hm); h.position.y = -0.135; h.castShadow = true; racket.add(h);
   })();
 
-  // --- 对手：按关节摆出来的简化人形 ---
+  // --- 对手：按关节摆出来的人形。骨架和每一帧的关节位置来自 motion.js / skeleton.js ---
   const body = new T3.Group(); scene.add(body);
-  const mJersey = std(0x2c9c8c, 0.85), mShorts = std(0x1a2231, 0.9), mSkin = std(0xe0b48f, 0.75), mHair = std(0x17120f, 0.9), mShoe = std(0xe9ecf1, 0.7), mEye = std(0x1a1410, 0.5);
+  const mJersey = std(0x2c9c8c, 0.85), mShorts = std(0x1a2231, 0.9), mSkin = std(0xe0b48f, 0.75), mHair = std(0x17120f, 0.9), mShoe = std(0xe9ecf1, 0.7), mEye = std(0x1a1410, 0.5), mSock = std(0xf2f2f2, 0.85);
   const addMesh = (geo, mat, parent = body) => { const m = new T3.Mesh(geo, mat); m.castShadow = true; parent.add(m); return m; };
-  const limb = (rb, rt, mat) => { const g = new T3.CylinderGeometry(rt, rb, 1, 16); g.translate(0, 0.5, 0); return addMesh(g, mat); };
-  const ball = (r, mat, parent) => addMesh(new T3.SphereGeometry(r, 18, 14), mat, parent);
+  const limb = (rb, rt, mat, seg = 16) => { const g = new T3.CylinderGeometry(rt, rb, 1, seg); g.translate(0, 0.5, 0); return addMesh(g, mat); };
+  const ball = (r, mat, parent, ws = 18, hs = 14) => addMesh(new T3.SphereGeometry(r, ws, hs), mat, parent);
   const setLimb = (m, a, b) => { m.position.copy(a); _v.copy(b).sub(a); const L = _v.length() || 1e-4; m.scale.set(1, L, 1); m.quaternion.setFromUnitVectors(UP, _v.multiplyScalar(1 / L)); };
+  // 截面是椭圆的那几段（躯干、手掌、骨盆）：纵轴沿 a→b，横轴大致朝 right
+  const setSlab = (m, a, b, right, sx, sz, len) => {
+    _y.copy(b).sub(a); const L = _y.length() || 1e-4; _y.multiplyScalar(1 / L);
+    _x.copy(right).addScaledVector(_y, -right.dot(_y)); if (_x.lengthSq() < 1e-8) _x.set(1, 0, 0); _x.normalize();
+    _z.crossVectors(_x, _y);
+    _m.makeBasis(_x, _y, _z); m.quaternion.setFromRotationMatrix(_m); m.position.copy(a); m.scale.set(sx, len === undefined ? L : len, sz);
+  };
   const B = {};
   (function buildBody() {
-    // 躯干：一条轮廓线绕脊柱转一圈，再把前后压扁
-    const prof = [[0.001, -0.06], [0.12, -0.05], [0.168, 0.0], [0.17, 0.06], [0.15, 0.17], [0.156, 0.27], [0.182, 0.37], [0.176, 0.44], [0.12, 0.49], [0.062, 0.515], [0.055, 0.56]].map((p) => new T3.Vector2(p[0], p[1]));
-    B.torso = addMesh(new T3.LatheGeometry(prof, 28), mJersey); B.torso.scale.z = 0.64;
-    B.shorts = ball(1, mShorts); B.shorts.scale.set(0.176, 0.105, 0.125);
-    B.neck = limb(0.052, 0.046, mSkin);
+    B.belly = limb(1, 0.95, mJersey, 24);
+    B.ribs = limb(0.88, 1, mJersey, 24);
+    B.waist = ball(1, mJersey); B.yoke = limb(0.062, 0.062, mJersey); B.top = ball(1, mJersey);
+    B.shorts = ball(1, mShorts);
+    B.neck = limb(0.05, 0.045, mSkin);
     B.head = new T3.Group(); body.add(B.head);
     const skull = ball(0.1, mSkin, B.head); skull.scale.set(0.9, 1.1, 1.0);
     const hair = addMesh(new T3.SphereGeometry(0.105, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.56), mHair, B.head); hair.scale.set(0.92, 1.1, 1.02); hair.rotation.x = -0.42; hair.position.y = 0.006;
-    for (const sx of [-1, 1]) { const e = ball(0.011, mEye, B.head); e.position.set(0.034 * sx, 0.012, 0.089); e.castShadow = false; }
-    const nose = ball(0.012, mSkin, B.head); nose.position.set(0, -0.012, 0.099);
-    for (const k of ['P', 'F']) {
-      B['sh' + k] = ball(0.06, mJersey);
-      B['up' + k] = limb(0.047, 0.04, mSkin);
-      B['sl' + k] = limb(0.06, 0.053, mJersey);   // 短袖
-      B['el' + k] = ball(0.041, mSkin);
-      B['fo' + k] = limb(0.04, 0.03, mSkin);
-      B['hip' + k] = ball(0.088, mShorts);
-      B['th' + k] = limb(0.068, 0.055, mSkin);
-      B['sh2' + k] = limb(0.09, 0.075, mShorts);  // 短裤腿
-      B['kn' + k] = ball(0.056, mSkin);
-      B['sn' + k] = limb(0.054, 0.038, mSkin);
-      B['shoe' + k] = ball(1, mShoe); B['shoe' + k].scale.set(0.052, 0.05, 0.135); // 鞋：一个压扁拉长的椭球，下半截埋在地面以下
+    for (const sx of [-1, 1]) {
+      const e = ball(0.011, mEye, B.head, 10, 8); e.position.set(0.034 * sx, 0.012, 0.089); e.castShadow = false;
+      const ear = ball(0.018, mSkin, B.head, 10, 8); ear.scale.set(0.5, 1, 0.8); ear.position.set(0.09 * sx, 0, 0.0);
     }
-    B.handP = ball(1, mSkin); B.handP.scale.set(0.034, 0.052, 0.03);
-    B.handF = ball(1, mSkin); B.handF.scale.set(0.045, 0.02, 0.055);
-  })();
-  function updateBody(sv, t, rq) {
-    const J = sv.body.at(t);
-    const pelvis = V(J.pelvis), neck = V(J.neck), F = V(J.F);
-    // 躯干朝向：竖轴 = 脊柱，横轴 = 两肩连线
-    const Y = neck.clone().sub(pelvis); const hgt = Y.length(); Y.normalize();
-    const X0 = V(J.shF).sub(V(J.shP));
-    const Z = new T3.Vector3().crossVectors(X0, Y).normalize(); if (Z.dot(F) < 0) Z.negate();
-    const X = new T3.Vector3().crossVectors(Y, Z).normalize();
-    _m.makeBasis(X, Y, Z);
-    B.torso.position.copy(pelvis); B.torso.quaternion.setFromRotationMatrix(_m); B.torso.scale.set(1, hgt / 0.53, 0.64);
-    B.shorts.position.copy(pelvis).addScaledVector(Y, 0.01); B.shorts.quaternion.copy(B.torso.quaternion);
-    const head = V(J.head);
-    setLimb(B.neck, neck.clone().addScaledVector(Y, -0.03), head);
-    B.head.position.copy(head); B.head.lookAt(V(J.look));
+    const nose = ball(0.012, mSkin, B.head, 10, 8); nose.position.set(0, -0.012, 0.099);
     for (const k of ['P', 'F']) {
-      const sh = V(J['sh' + k]), el = V(J['el' + k]), wr = V(J['wr' + k]);
+      B['sh' + k] = ball(0.062, mJersey);
+      B['up' + k] = limb(0.048, 0.04, mSkin);
+      B['sl' + k] = limb(0.061, 0.054, mJersey);   // 短袖
+      B['el' + k] = ball(0.041, mSkin);
+      B['fo' + k] = limb(0.04, 0.029, mSkin);
+      B['wr' + k] = ball(0.03, mSkin, body, 12, 10);
+      B['palm' + k] = ball(1, mSkin);
+      B['fg' + k] = [];
+      for (let f = 0; f < 5; f++) {
+        const r = FINGER_RAD[f], segs = [];
+        for (let s2 = 0; s2 < 3; s2++) segs.push({ bone: limb(r * (1 - 0.08 * s2), r * (0.92 - 0.08 * s2), mSkin, 8), tip: ball(r * (0.92 - 0.08 * s2), mSkin, body, 8, 6) });
+        B['fg' + k].push(segs);
+      }
+      B['hip' + k] = ball(0.088, mShorts);
+      B['th' + k] = limb(0.07, 0.053, mSkin);
+      B['sh2' + k] = limb(0.092, 0.076, mShorts);  // 短裤腿
+      B['kn' + k] = ball(0.055, mSkin);
+      B['sn' + k] = limb(0.053, 0.037, mSkin);
+      B['sock' + k] = limb(0.041, 0.043, mSock);
+      B['shoe' + k] = ball(1, mShoe); B['shoe' + k].scale.set(0.05, 0.045, 0.132); // 鞋：一个压扁拉长的椭球，下半截埋在地面以下
+    }
+  })();
+  let shirtOf = null;
+  function updateBody(sv, t) {
+    const J = sv.body.at(t, true);
+    const pel = V(J.pelvis), mid = V(J.mid), chest = V(J.chest), Rh = V(J.R), Rc = V(J.Rc), Uc = V(J.Uc);
+    const Rm = Rh.clone().lerp(Rc, 0.45).normalize();
+    // 躯干：腰腹一段、胸廓一段，各自顺着脊柱；截面是扁的
+    setSlab(B.belly, pel.clone().addScaledVector(V(J.sd1), -0.02), mid, Rm, 0.15, 0.108);
+    setSlab(B.ribs, mid, chest.clone().addScaledVector(Uc, -0.035), Rc, 0.172, 0.114);
+    setSlab(B.waist, mid.clone().addScaledVector(Uc, -0.07), mid.clone().addScaledVector(Uc, 0.07), Rm, 0.1445, 0.1, 0.075);
+    setSlab(B.top, chest.clone().addScaledVector(Uc, -0.095), chest, Rc, 0.172, 0.114, 0.075);
+    setSlab(B.shorts, pel.clone().addScaledVector(UP, -0.06), pel.clone().addScaledVector(V(J.sd1), 0.06).addScaledVector(UP, 0.02), Rh, 0.174, 0.128, 0.115);
+    const shP = V(J.shP), shF = V(J.shF);
+    setLimb(B.yoke, shP, shF);
+    const head = V(J.head);
+    setLimb(B.neck, V(J.neck), head);
+    B.head.position.copy(head); B.head.lookAt(_v.copy(head).add(_v2.set(J.look[0], J.look[1], J.look[2])));
+    for (const k of ['P', 'F']) {
+      const sh = k === 'P' ? shP : shF, el = V(J['el' + k]), wr = V(J['wr' + k]);
       B['sh' + k].position.copy(sh);
       setLimb(B['up' + k], sh, el);
-      setLimb(B['sl' + k], sh, sh.clone().lerp(el, 0.5));
+      setLimb(B['sl' + k], sh, _a.copy(sh).lerp(el, 0.52));
       B['el' + k].position.copy(el);
       setLimb(B['fo' + k], el, wr);
-      const hip = V(J['hip' + k]), kn = V(J['kn' + k]), an = V(J['an' + k]);
+      B['wr' + k].position.copy(wr);
+      // 手掌和手指
+      const H = J['hand' + k], d = V(H.d), pn = V(H.p);
+      const right = _b.crossVectors(d, pn);
+      setSlab(B['palm' + k], _a.copy(wr).addScaledVector(d, 0.004).addScaledVector(pn, -0.002), _c.copy(wr).addScaledVector(d, 0.094).addScaledVector(pn, -0.002), right, 0.041, 0.0135, 0.047);
+      B['palm' + k].position.copy(wr).addScaledVector(d, 0.049).addScaledVector(pn, -0.002);
+      const fg = J['fing' + k];
+      for (let f = 0; f < 5; f++) for (let s2 = 0; s2 < 3; s2++) {
+        const a = fg[f][s2], b = fg[f][s2 + 1], seg = B['fg' + k][f][s2];
+        setLimb(seg.bone, _a.set(a[0], a[1], a[2]), _c.set(b[0], b[1], b[2]));
+        seg.tip.position.set(b[0], b[1], b[2]);
+      }
+      const hip = V(J['hip' + k]), kn = V(J['kn' + k]), an = V(J['an' + k]), toe = J['toe' + k];
       B['hip' + k].position.copy(hip);
       setLimb(B['th' + k], hip, kn);
-      setLimb(B['sh2' + k], hip, hip.clone().lerp(kn, 0.55));
+      setLimb(B['sh2' + k], hip, _a.copy(hip).lerp(kn, 0.55));
       B['kn' + k].position.copy(kn);
       setLimb(B['sn' + k], kn, an);
+      setLimb(B['sock' + k], _a.copy(kn).lerp(an, 0.8), _c.copy(an).setY(0.05));
       const shoe = B['shoe' + k];
-      shoe.position.set(an.x + J.F[0] * 0.05, 0.03, an.z + J.F[2] * 0.05);
-      shoe.rotation.set(0, Math.atan2(J.F[0], J.F[2]), 0);
+      shoe.position.set(an.x + toe[0] * 0.055, 0.032, an.z + toe[2] * 0.055);
+      shoe.rotation.set(0, Math.atan2(toe[0], toe[2]), 0);
     }
-    // 握拍的手跟着拍柄；托球的手掌朝上
-    B.handP.position.copy(racket.position).addScaledVector(_v.set(0, 1, 0).applyQuaternion(racket.quaternion), -0.13);
-    B.handP.quaternion.copy(racket.quaternion);
-    B.handF.position.set(J.wrF[0], J.wrF[1] + 0.012, J.wrF[2]);
-    B.handF.rotation.set(0, Math.atan2(J.F[0], J.F[2]), 0);
+    if (shirtOf !== sv.player && PLAYERS[sv.player]) { shirtOf = sv.player; mJersey.color.copy(C(PLAYERS[sv.player].shirt)); }
   }
 
   // --- 箭头、转向环、标签 ---
@@ -284,7 +315,8 @@ function start(hot) {
   const trailGeo = new T3.BufferGeometry(); trailGeo.setAttribute('position', new T3.BufferAttribute(new Float32Array(TR_MAX * 3), 3));
   const trail = new T3.Line(trailGeo, new T3.LineBasicMaterial({ color: C(0xffb35c), transparent: true, opacity: 0.9 })); trail.frustumCulled = false; scene.add(trail);
   let trailT = [], trailN = 0;
-  const pathGeo = new T3.BufferGeometry(); pathGeo.setAttribute('position', new T3.BufferAttribute(new Float32Array(120 * 3), 3));
+  const PATH_N = 140;
+  const pathGeo = new T3.BufferGeometry(); pathGeo.setAttribute('position', new T3.BufferAttribute(new Float32Array(PATH_N * 3), 3));
   const swingPath = new T3.Line(pathGeo, new T3.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45 })); swingPath.frustumCulled = false; scene.add(swingPath);
   const marks = [];
   for (let i = 0; i < 4; i++) { const m = new T3.Mesh(new T3.RingGeometry(0.02, 0.031, 28), new T3.MeshBasicMaterial({ color: C(0xffb35c), side: T3.DoubleSide, transparent: true, opacity: 0.95 })); m.rotation.x = -Math.PI / 2; m.visible = false; scene.add(m); marks.push(m); }
@@ -296,11 +328,13 @@ function start(hot) {
       for (let i = 0; i < Sm.n && trailN < TR_MAX; i += stepN) { pa[trailN * 3] = Sm.p[i * 3]; pa[trailN * 3 + 1] = Sm.p[i * 3 + 1]; pa[trailN * 3 + 2] = Sm.p[i * 3 + 2]; trailT.push(i * Sm.dt); trailN++; }
     }
     trailGeo.attributes.position.needsUpdate = true;
-    const pp = pathGeo.attributes.position.array; const t0 = -sv.swing.T1, t1 = sv.swing.tDone;
-    for (let i = 0; i < 120; i++) { const b = sv.racketAt(t0 + ((t1 - t0) * i) / 119).b; pp[i * 3] = b[0]; pp[i * 3 + 1] = b[1]; pp[i * 3 + 2] = b[2]; }
+    // 拍面中心从引拍到收拍走过的路
+    const pp = pathGeo.attributes.position.array; const t0 = sv.tSwing0 - 0.02, t1 = sv.tSwingEnd + 0.02;
+    for (let i = 0; i < PATH_N; i++) { const c = sv.racketAt(t0 + ((t1 - t0) * i) / (PATH_N - 1)).c; pp[i * 3] = c[0]; pp[i * 3 + 1] = c[1]; pp[i * 3 + 2] = c[2]; }
     pathGeo.attributes.position.needsUpdate = true;
     const bs = sv.events.filter((e) => e.type === 'bounce');
     marks.forEach((m, i) => { if (bs[i]) { m.position.set(bs[i].p[0], P.tableY + 0.0012, bs[i].p[2]); m.userData.t = bs[i].t; } else m.userData.t = Infinity; });
+    sv.pel0 = sv.body ? sv.body.at(0).pelvis : sv.pc; // 人站在哪儿（镜头取景用）
   }
 
   // ================= 视角 =================
@@ -316,37 +350,53 @@ function start(hot) {
     const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
     const wide = w > 1020, free = (w - (wide ? 296 + 310 : 0)) / 2 - 120; // 没被挡住的半宽，留出一个人的余量
     const f = h / 2 / Math.tan((camera.fov * DEG) / 2);
-    const xs = (sv.pc[0] + (sv.body ? sv.body.layout.P[0] : sv.pc[0])) / 2;
+    const xs = (sv.pc[0] + (sv.pel0 ? sv.pel0[0] : sv.pc[0])) / 2;
     const off = (Math.abs(xs) / 4.5) * f;
     return off > free ? clamp((Math.sign(xs) * (off - free) * 4.1) / f, -0.9, 0.9) : 0;
   }
-  function setView(name, instant) {
+  function setView(name, instant, wide) {
     S.view = name;
     const sv = S.serve;
     const pc = sv ? V(sv.pc) : new T3.Vector3(0.35, 0.92, -1.5);
+    const pel = sv && sv.pel0 ? sv.pel0 : null;
     const toEye = EYE.clone().sub(pc).normalize();
     let pos, tgt;
     if (name === 'recv') { pos = EYE.clone(); recvAx = recvAim(sv); tgt = new T3.Vector3(recvAx, 0.95, -1.2); }
     else if (name === 'close') { // 还是从你这边看过去，只是走近了
-      const bx = sv && sv.body ? sv.body.layout.P[0] - pc.x : 0;
+      const bx = pel ? pel[0] - pc.x : 0;
       tgt = pc.clone().add(new T3.Vector3(bx * 0.35, 0.2, 0)); pos = tgt.clone().addScaledVector(toEye, 1.95); pos.y += 0.05;
     } else if (name === 'contact') { // 触球特写：还在你这一侧，挑一个"拍面朝向"和"蹭球方向"两根箭头都不正对镜头的角度
       const nn = sv ? V(sv.n) : new T3.Vector3(0, 0, 1);
       const bb = sv && sv.an && sv.an.brush ? V(sv.an.brush) : null;
       if (bb && bb.length() > 0.2) bb.normalize();
-      const bd = sv && sv.body ? new T3.Vector3(sv.body.layout.P[0] - pc.x, 0, sv.body.layout.P[2] - pc.z).normalize() : null;
+      const bd = pel ? new T3.Vector3(pel[0] - pc.x, 0, pel[2] - pc.z).normalize() : null;
       const eh = new T3.Vector3(toEye.x, 0, toEye.z).normalize();
+      // wide：慢放整个挥拍时退远一点，把引拍、收拍和上半身都框进来
+      const dist = wide ? 1.8 : 1.0;
+      tgt = pc.clone();
+      const J0 = sv && sv.body ? sv.body.at(0) : null;
+      if (wide && J0) tgt.lerp(V(J0.chest), 0.22);
+      // 他自己的头、肩、手臂别挡在镜头和触球点之间，也别怼到镜头跟前
+      const blockers = J0 ? [[J0.head, 0.13], [J0.chest, 0.16], [J0.shF, 0.08], [J0.shP, 0.08], [J0.elF, 0.06], [J0.wrF, 0.06], [J0.elP, 0.06], [J0.mid, 0.15]] : [];
       let best = null;
-      for (let az = -70; az <= 70; az += 14) for (const el of [0.04, 0.22, 0.45, 0.75]) {
+      for (let az = -80; az <= 80; az += 10) for (const el of [0.04, 0.2, 0.4, 0.65]) {
         const d = eh.clone().applyAxisAngle(UP, az * DEG); d.y = el; d.normalize();
         let score = Math.max(Math.abs(d.dot(nn)), bb && bb.lengthSq() > 0.5 ? Math.abs(d.dot(bb)) : 0) + 0.004 * Math.abs(az) + 0.15 * el;
         if (bd && d.dot(bd) > 0.35) score += 1; // 别把镜头架到他身体那一侧去
+        _a.copy(tgt).addScaledVector(d, dist); if (_a.y < P.tableY + 0.16) _a.y = P.tableY + 0.16;
+        for (const [p, r] of blockers) {
+          _b.set(p[0], p[1], p[2]);
+          _x.copy(pc).sub(_a); const L2 = _x.lengthSq(), u = clamp(_y.copy(_b).sub(_a).dot(_x) / L2, 0, 1);
+          const off = _y.copy(_a).addScaledVector(_x, u).distanceTo(_b);
+          if (off < r + 0.05 && u < 0.97) score += 0.8 + 2 * (r + 0.05 - off) / (r + 0.05);
+          const near = _b.distanceTo(_a); if (near < 0.5 * dist) score += 2 * (0.5 * dist - near) / dist;
+        }
         if (!best || score < best.score) best = { d, score };
       }
-      tgt = pc.clone(); pos = pc.clone().addScaledVector(best.d, 0.95);
+      pos = tgt.clone().addScaledVector(best.d, dist);
       if (pos.y < P.tableY + 0.16) pos.y = P.tableY + 0.16;
     }
-    else if (name === 'side') { const sgn = sv && sv.body ? Math.sign(sv.body.layout.P[0] - pc.x) || 1 : 1; pos = new T3.Vector3(-5.6 * sgn, 1.5, -0.2); tgt = new T3.Vector3(0, 0.9, -0.2); }
+    else if (name === 'side') { const sgn = pel ? Math.sign(pel[0] - pc.x) || 1 : 1; pos = new T3.Vector3(-5.6 * sgn, 1.5, -0.2); tgt = new T3.Vector3(0, 0.9, -0.2); }
     else if (name === 'top') { tgt = new T3.Vector3(0, 0.76, -0.4); pos = new T3.Vector3(0, 8.9, -0.38); } // 把站在端线后面的人也框进来
     else { // 凑近看球：还是从你这一侧看，球停在画面正中
       _v.copy(EYE).sub(ballPos); _v.y = Math.max(_v.y, 0.12); _v.normalize();
@@ -376,6 +426,15 @@ function start(hot) {
   // ================= 每帧把"时间 t 的发球状态"画出来 =================
   const qShow = new T3.Quaternion();
   const reviewing = () => S.mode === 'lab' || S.phase === 'review';
+  // 练习时球看到哪一刻为止。落到你这边台面的那一下就消失：落台之后那段弧线太容易看出上下旋，实战里那时候早该出手了
+  function ballGoneAt(sv) {
+    const w = S.set.watch;
+    if (w === 'racket') return 0.03;
+    if (w === 'net' && sv.verdict.net) return sv.verdict.net.t + 0.01;
+    return sv.arrive ? sv.arrive.t + 0.004 : sv.tEnd;
+  }
+  // 练习时动作放到哪儿为止：球消失之后再留一小会儿，把收拍看完
+  const playEndOf = (sv) => Math.min(sv.tEnd, Math.max(ballGoneAt(sv) + 0.2, sv.tSwingEnd + 0.4));
   // 旋转按球自己的方向分解：X = 横轴（垂直于前进方向，水平），Y = 竖轴，Z = 前后轴（前进方向）
   function axesFor(b) {
     if (Math.hypot(b.v[0], b.v[2]) > 0.15) { const sp = spinParts(b.w, b.v); return { ax: [sp.h, [0, 1, 0], sp.f], c: [sp.top, sp.side, sp.cork] }; }
@@ -386,10 +445,7 @@ function start(hot) {
     const b = sv.ballAt(t);
     const rv = reviewing();
     let hideBall = false;
-    if (!rv) {
-      if (S.set.watch === 'racket' && t > 0.03) hideBall = true;
-      if (S.phase === 'ask' && !S.playing) hideBall = true; // 球已经飞过去了，不留在半空
-    }
+    if (!rv && t > ballGoneAt(sv)) hideBall = true;
     ballPos.set(b.p[0], b.p[1], b.p[2]);
     ballPivot.position.copy(ballPos); ballPivot.visible = !hideBall;
     ballMesh.material = rv ? matMark : matPlain;
@@ -412,12 +468,10 @@ function start(hot) {
 
     // 球拍与对手
     const pz = sv.racketAt(t);
-    const face = TYPES[sv.type].face;
-    const zw = qRot(pz.q, [0, 0, face]);
     racket.quaternion.set(pz.q[0], pz.q[1], pz.q[2], pz.q[3]);
-    racket.position.set(pz.b[0] - zw[0] * 0.0055, pz.b[1] - zw[1] * 0.0055, pz.b[2] - zw[2] * 0.0055);
+    racket.position.set(pz.c[0], pz.c[1], pz.c[2]);
     body.visible = !!sv.body;
-    if (sv.body) updateBody(sv, t, pz.q);
+    if (sv.body) updateBody(sv, t);
 
     // 轨迹与落点
     const showTr = rv && S.trail && trailN > 1;
@@ -506,43 +560,55 @@ function start(hot) {
     if (Math.abs(z) > 0.33) out.push(z > 0 ? '朝你这边' : '往他自己那边');
     return out.join('、') || '几乎没动';
   };
+  // 到你面前算哪一类。带侧旋的叫侧上 / 侧下，不带侧旋的叫上旋 / 下旋
+  const clsName = (sv, cls = sv.cls) => (sv.kind === 'pure' ? { top: '上旋', back: '下旋', flat: '不转' } : { top: '侧上', back: '侧下', flat: '不转' })[cls];
+  const FAKE_TXT = { lift: '触球之后拍子往上一提，是装出来的"往上蹭"', chop: '触球之后拍子往下一切，是装出来的"往下蹭"', tuck: '触球之后马上把拍子收回身前，不让你多看' };
   function explainHtml(sv) {
     if (!sv.col) return '<li><b>没碰到球</b>拍面是背着球走的，拍子和球错开了。</li>';
     const a = sv.an, out = [];
+    // 1. 拍面朝哪儿、碰到球的哪儿
     const o = a.openDeg;
-    let face = o >= 75 ? '几乎放平，拍面朝天' : o >= 45 ? '后仰得很多' : o >= 20 ? '明显后仰' : o >= 6 ? '稍微后仰，接近立着' : o > -6 ? '立着' : '压着拍';
-    face += `（${o >= 0 ? '后仰' : '前倾'} ${Math.abs(o).toFixed(0)}°）`;
-    if (Math.abs(a.yawDeg) >= 12 && o < 75) face += `，拍面偏向你的${a.yawDeg > 0 ? '右' : '左'}边`;
-    out.push(`<li><b>拍面</b>${face}。</li>`);
+    let face = o >= 75 ? '几乎放平、朝天' : o >= 45 ? '后仰得很多' : o >= 20 ? '明显后仰' : o >= 6 ? '稍微后仰' : o > -6 ? '立着' : '前倾（压着拍）';
+    face += `（${Math.abs(o).toFixed(0)}°）`;
+    if (Math.abs(a.yawDeg) >= 12 && o < 75) face += `、偏向你的${a.yawDeg > 0 ? '右' : '左'}边`;
     const u = a.spotUp;
     let sp = u < -0.87 ? '球的底部' : u < -0.5 ? '球的后下方' : u < -0.17 ? '球的后面偏下' : u < 0.17 ? '球的正后面' : '球的后上方';
-    if (a.spotSide > 0.25) sp += '、偏你的右手边'; else if (a.spotSide < -0.25) sp += '、偏你的左手边';
-    out.push(`<li><b>碰到哪儿</b>拍子贴在${sp}。</li>`);
+    if (a.spotSide > 0.25) sp += '偏你的右手边'; else if (a.spotSide < -0.25) sp += '偏你的左手边';
+    let zone = '';
+    if (sv.body) zone = a.off[1] > 0.02 ? '，用的是<b class="in">拍头那一端</b>（挥起来那儿走得最快）' : a.off[1] < -0.012 ? '，用的是<b class="in">靠近拍柄的地方</b>（那儿走得慢，蹭出来的旋转少）' : '';
+    let head = '';
+    if (a.head) { const y = a.head[1]; head = y < -0.6 ? '拍头朝下' : y < -0.25 ? '拍头斜朝下' : y < 0.25 ? '拍头横着' : y < 0.6 ? '拍头斜朝上' : '拍头朝上'; }
+    out.push(`<li><b>拍面</b>${face}，贴在${sp}${zone}。${head ? `<i>这一球${head}。拍头指哪儿不影响旋转，只看拍面朝哪、往哪蹭。</i>` : ''}</li>`);
+    // 2. 怎么蹭的：整体方向，再拆成"顺着拍面上下"（只管上下旋）和"横着"（只管侧旋）两份
     const bs = Math.hypot(a.brush[0], a.brush[1], a.brush[2]);
-    out.push(`<li><b>怎么蹭的</b>拍子贴着球${dirWord(a.brush)}蹭过去，${bs.toFixed(1)} m/s（<span class="cb">黄箭头</span>）。</li>`);
-    // 这一蹭拆成两份：顺着拍面上下的那份只管上下旋，横着的那份只管侧旋
+    const thick = bs > 1.7 * a.push ? '蹭得薄，主要靠摩擦。' : bs < 0.75 * a.push ? '顶得多、蹭得少，球主要是被撞出去的。' : '';
     const L = sv.launch, tp = L.top / RPS, sd = L.side / RPS, ck = L.cork / RPS;
     const va = a.relAlong, vs = Math.sqrt(Math.max(0, bs * bs - va * va));
-    const flatFace = o >= 55;
     const split = Math.abs(va) > 0.1 * bs && vs > 0.1 * bs; // 画面里只有两份都够大时才画红、绿两根箭头
-    const red = split ? '（<span class="cx">红箭头</span>）' : '', green = split ? '（<span class="cy">绿箭头</span>）' : '';
-    let upTxt;
-    if (Math.abs(tp) < 6) upTxt = `顺着拍面上下的那份只有 ${Math.abs(va).toFixed(1)} m/s，几乎没蹭到，所以离拍时<span class="cx">${Math.abs(tp) < 1.5 ? '没有上下旋' : `只有一点${tp > 0 ? '上' : '下'}旋（${Math.abs(tp).toFixed(0)}）`}</span>`;
-    else if (tp > 0) upTxt = `顺着拍面<b class="in">往上</b>的那份 ${va.toFixed(1)} m/s${red}蹭出<span class="cx">上旋 ${tp.toFixed(0)}</span>`;
-    else upTxt = `顺着拍面<b class="in">往下</b>的那份 ${Math.abs(va).toFixed(1)} m/s${red}蹭出<span class="cx">下旋 ${Math.abs(tp).toFixed(0)}</span>${flatFace ? '。拍面这么平，"往下"看上去就是朝你这边送' : ''}`;
-    if (a.racketAlong < -0.3 && va > 0.3 && tp >= 6) upTxt += '。拍子自己是往下走的，但球落得更快，相对球来说拍子在往上蹭';
+    const red = split ? '<span class="cx">（红）</span>' : '', green = split ? '<span class="cy">（绿）</span>' : '';
+    let upTxt, note = '';
+    if (Math.abs(tp) < 6) upTxt = `上下方向只蹭了 ${Math.abs(va).toFixed(1)}，离拍时<span class="cx">${Math.abs(tp) < 1.5 ? '没有上下旋' : `只有一点${tp > 0 ? '上' : '下'}旋（${Math.abs(tp).toFixed(0)} 转/秒）`}</span>`;
+    else if (tp > 0) upTxt = `顺着拍面<b class="in">往上</b>蹭 ${va.toFixed(1)}${red} → <span class="cx">上旋 ${tp.toFixed(0)} 转/秒</span>`;
+    else upTxt = `顺着拍面<b class="in">往下</b>蹭 ${Math.abs(va).toFixed(1)}${red} → <span class="cx">下旋 ${Math.abs(tp).toFixed(0)} 转/秒</span>`;
+    if (tp <= -6 && o >= 55) note = '拍面很平，"往下蹭"看上去就是朝你这边送。';
+    else if (a.racketAlong < -0.3 && va > 0.3 && tp >= 6) note = '拍子自己在往下走，但球落得更快，相对球还是往上蹭。';
     let sideTxt = '';
     if (Math.abs(sd) >= 3 || Math.abs(ck) >= 6) {
-      sideTxt = `；横着的那份 ${vs.toFixed(1)} m/s${green}蹭出<span class="cy">侧旋 ${Math.abs(sd).toFixed(0)}</span>`;
-      if (Math.abs(ck) >= 6) sideTxt += `，拍面不是立着的，所以其中一部分成了<span class="cz">螺旋 ${Math.abs(ck).toFixed(0)}</span>`;
+      sideTxt = `；横着蹭 ${vs.toFixed(1)}${green} → <span class="cy">侧旋 ${Math.abs(sd).toFixed(0)}</span>`;
+      if (Math.abs(ck) >= 6) sideTxt += `、<span class="cz">螺旋 ${Math.abs(ck).toFixed(0)}</span>`;
     }
-    out.push(`<li><b>拆开看</b>${upTxt}${sideTxt}。（单位：转/秒）</li>`);
+    out.push(`<li><b>怎么蹭的</b>贴着球${dirWord(a.brush)}蹭 ${bs.toFixed(1)} m/s（<span class="cb">黄箭头</span>），同时朝球里顶 ${a.push.toFixed(1)} m/s。${thick}<br>${upTxt}${sideTxt}。${note ? `<i>${note}</i>` : ''}</li>`);
+    // 3. 到你面前
     if (sv.arrive) {
       const R = sv.arrive.top / RPS, d = R - tp;
-      const res = Math.abs(R) < TH_RPS ? '几乎没有上下旋' : (R > 0 ? '上旋 ' : '下旋 ') + Math.abs(R).toFixed(0);
-      const tbl = d > 1 ? `每次落台都被台面往上旋方向带一点（这球一共 ${d.toFixed(0)}）` : d < -1 ? `上旋太强，落台时反被台面磨掉 ${(-d).toFixed(0)}` : '这球落台几乎没改变上下旋';
-      out.push(`<li><b>到你面前</b>球在他那边落一次、你这边落一次，${tbl}，到你面前是<em class="${R >= TH_RPS ? 'up' : R <= -TH_RPS ? 'dn' : ''}">${res}</em>。${sv.fake ? '触球之后反着收拍的那一下是假动作，不算数。' : ''}</li>`);
+      const res = Math.abs(R) < TH_RPS ? '基本不转' : (R > 0 ? '上旋 ' : '下旋 ') + Math.abs(R).toFixed(0);
+      const tbl = d > 1 ? `落两次台，台面把它往上旋方向带了 ${d.toFixed(0)}` : d < -1 ? `上旋太强，落台时被台面磨掉 ${(-d).toFixed(0)}` : '落两次台，上下旋几乎没变';
+      let extra = '';
+      if (sv.dead) extra = '这是"顶"出来的球：离拍几乎不转，落台后自己往前滚。拿搓下旋的手型去碰会冒高。';
+      else if (sv.cls === 'flat') extra = '往下蹭了，但不够多，下旋在台面上磨光了。不到 5 转/秒就算不转。';
+      out.push(`<li><b>到你面前</b>${tbl}，到你面前是<em class="${R >= TH_RPS ? 'up' : R <= -TH_RPS ? 'dn' : ''}">${res}</em>。${extra}</li>`);
     } else out.push(`<li><b>这球</b>${sv.verdict.why}。</li>`);
+    if (sv.fakeKind) out.push(`<li><b>假动作</b>${FAKE_TXT[sv.fakeKind]}。那是球离拍之后的事，不算数。</li>`);
     return out.join('');
   }
 
@@ -555,12 +621,13 @@ function start(hot) {
   function makeServe() {
     const s = S.set;
     const types = TYPE_KEYS.filter((k) => s.types[k]);
+    const kinds = ['side', 'pure'].filter((k) => s.kinds[k]);
     const ps = [-1, 0, 1].filter((_, i) => s.pos[i]), ls = ['short', 'long'].filter((_, i) => s.len[i]);
     for (let k = 0; k < 10; k++) {
       const r = Math.random();
-      const intent = s.choices === 3 ? (r < 0.4 ? 'top' : r < 0.8 ? 'back' : 'flat') : r < 0.5 ? 'top' : 'back';
-      const cfg = { type: pick(types.length ? types : TYPE_KEYS), hand: s.hand, intent, pos: pick(ps.length ? ps : [-1, 0, 1]), len: pick(ls.length ? ls : ['short', 'long']),
-        style: s.style === 'random' ? undefined : s.style, fake: s.fake === 'all' || (s.fake === 'some' && Math.random() < 0.45) };
+      const intent = s.choices === 3 ? (r < 0.38 ? 'top' : r < 0.76 ? 'back' : 'flat') : r < 0.5 ? 'top' : 'back';
+      const cfg = { type: pick(types.length ? types : TYPE_KEYS), kind: pick(kinds.length ? kinds : ['side']), hand: s.hand, intent, pos: pick(ps.length ? ps : [-1, 0, 1]), len: pick(ls.length ? ls : ['short', 'long']),
+        player: s.player === 'random' ? undefined : s.player, fake: s.fake === 'all' || (s.fake === 'some' && Math.random() < 0.45) };
       const sv = generateServe(cfg);
       if (sv) { sv.cfg = cfg; return sv; }
     }
@@ -570,7 +637,7 @@ function start(hot) {
     const sv = makeServe();
     if (!sv) { S.serve = null; renderStage(); return false; }
     adopt(sv);
-    S.dirty = false; S.phase = 'ready'; S.answer = null; S.t = sv.tStart; S.playing = false; S.stopAt = null; S.iso = 'all'; S.spinView = false;
+    S.dirty = false; S.phase = 'ready'; S.answer = null; S.t = sv.tStart; S.playing = false; S.stopAt = null; S.auto = null; S.iso = 'all'; S.spinView = false;
     backToHome(true);
     syncUI(); renderStage();
     return true;
@@ -581,47 +648,66 @@ function start(hot) {
     const v = special ? S.home : S.view;
     if (special || (newServe && (v === 'close' || v === 'side' || (v === 'recv' && Math.abs(recvAim(S.serve) - recvAx) > 0.03)))) setView(v);
   }
-  function playServe() {
-    if (S.dirty || !S.serve) { if (!nextServe()) return; } // 设置改过：换一个符合新设置的球再发
+  function runPlay() { // 按练习的方式把这一球放一遍
     const sv = S.serve;
-    S.phase = 'play'; S.t = sv.tStart + 0.25; S.rate = S.set.speed; S.playing = true; S.stopAt = null; S.live = null; S.answer = null; S.spinView = false;
+    S.phase = 'play'; S.t = sv.tStart + 0.25; S.rate = S.set.speed; S.playing = true; S.stopAt = playEndOf(sv); S.auto = null; S.live = null; S.spinView = false;
     backToHome(false);
     syncUI(); renderStage();
+  }
+  function playServe() {
+    if (S.dirty || !S.serve) { if (!nextServe()) return; } // 设置改过：换一个符合新设置的球再发
+    S.answer = null;
+    runPlay();
   }
   function onPlayEnd() {
     if (S.mode === 'practice' && S.phase === 'play') { S.phase = 'ask'; renderStage(); }
     syncTransport();
   }
-  function showContact(replay) { // 回到触球那一下：慢放到触球瞬间停住
+  // 慢放整个动作：引拍 → 触球（放得最慢）→ 收拍 / 假动作 → 球飞完全程。中途不停
+  function autoRate(sv, t) {
+    if (t < -0.07) return 0.2;
+    if (t < 0.05) return 0.05;
+    if (t < sv.tSwingEnd + 0.1) return 0.2;
+    return 0.5;
+  }
+  function showContact(replay) {
     const sv = S.serve; if (!sv) return;
     S.spinView = false; S.iso = 'all';
-    setView('contact');
-    if (replay) { S.t = -0.22; S.rate = 0.1; S.playing = true; S.stopAt = 0; } else { S.t = 0; S.playing = false; S.stopAt = null; }
+    if (replay) {
+      setView('contact', false, true);
+      S.t = Math.max(sv.tStart, sv.tSwing0 - 0.2); S.playing = true; S.stopAt = null;
+      S.auto = { cam: true }; S.rate = autoRate(sv, S.t);
+    } else { setView('contact'); S.t = 0; S.playing = false; S.stopAt = null; S.auto = null; }
     syncUI();
   }
   function showSpin(at) { // 凑近看球：默认停在到你面前的那一刻，球在原地慢慢转
     const sv = S.serve; if (!sv) return;
-    S.playing = false; S.stopAt = null;
+    S.playing = false; S.stopAt = null; S.auto = null;
     if (at !== undefined) S.t = Math.min(sv.tEnd, at);
     else if (sv.arrive) S.t = Math.min(sv.tEnd, sv.arrive.t + 0.05); else if (S.t < 0.05) S.t = Math.min(sv.tEnd, 0.08);
-    S.spinView = true;
+    S.spinView = true; $('#spinMore').open = true;
     const b = sv.ballAt(S.t); ballPos.set(b.p[0], b.p[1], b.p[2]);
     setView('ball');
     syncUI();
   }
   function answer(a) {
     const sv = S.serve; if (!sv || S.answer || (S.phase !== 'play' && S.phase !== 'ask') || S.t < 0) return;
+    // 你是在球飞到哪儿的时候下的判断
+    const tn = sv.verdict.net ? sv.verdict.net.t : 1e9, ta = sv.arrive ? sv.arrive.t : 1e9;
+    S.ansWhen = S.phase === 'ask' || S.t >= ta ? '球落到你这边之后才判断的，实战里这时候该出手了' : S.t < tn ? '球过网之前就判断了' : '球过了网、还没落台时判断的';
     S.answer = a; S.phase = 'review';
     renderStage(); showContact(true);
   }
   function describe(sv) {
-    const c = sv.cfg || {};
-    return `${TYPES[sv.type].short}${sv.hand < 0 ? '（左手）' : ''} · ${c.len === 'short' ? '近' : '远'}${sv.fake ? ' · 有假动作' : ''}`;
+    const c = sv.cfg || {}, pl = PLAYERS[sv.player];
+    return `${pl ? pl.name + ' · ' : ''}${TYPES[sv.type].short}${sv.hand < 0 ? '（左手）' : ''} · ${c.len === 'short' ? '近' : '远'}${sv.fake ? ' · 有假动作' : ''}`;
   }
-  function brief(sv) { // 一句话：这球为什么是侧上 / 侧下
+  function brief(sv) { // 一句话：这球为什么是这个旋转
     const o = sv.an.openDeg, tp = sv.launch.top / RPS;
     const face = o >= 6 ? `拍面后仰 ${o.toFixed(0)}°` : o > -6 ? '拍面立着' : `拍面前倾 ${(-o).toFixed(0)}°`;
+    if (sv.dead) return `${face}，是顶出来的：上下方向几乎没蹭，落台后自己往前滚`;
     if (Math.abs(tp) < 6) return `${face}，上下方向几乎没蹭${sv.cls === 'top' ? '，落台后才带上上旋' : ''}`;
+    if (sv.cls === 'flat') return `${face}，往下蹭了但不够多，到你面前已经磨没了`;
     return `${face}，顺着拍面往${tp > 0 ? '上' : '下'}蹭`;
   }
   function renderStage() {
@@ -630,25 +716,26 @@ function start(hot) {
   function renderStageInner() {
     const st = $('#stage'), sv = S.serve;
     if (S.mode === 'lab') {
-      st.innerHTML = `<div class="row"><button type="button" class="btn primary" data-act="labplay">播放这一球</button><button type="button" class="btn" data-act="contact">看触球瞬间</button><button type="button" class="btn" data-act="spin">看球怎么转</button><p class="hint" style="flex:1">拖左边的滑杆，球路和右边的讲解会跟着重算。</p></div>`;
+      st.innerHTML = `<div class="row"><button type="button" class="btn primary" data-act="labplay">播放这一球</button><button type="button" class="btn" data-act="hit">看触球瞬间</button><button type="button" class="btn" data-act="spin">看球怎么转</button><p class="hint" style="flex:1">拖左边的滑杆，球路和右边的讲解会跟着重算。</p></div>`;
       return;
     }
     if (!sv) { st.innerHTML = '<p class="hint">这组设置下没算出能上台的发球，换个设置再试。</p>'; return; }
     if (S.phase === 'ready') {
       st.innerHTML = `<div class="row"><button type="button" class="btn primary" data-act="serve">发球<kbd>空格</kbd></button>
-        <p class="hint" style="flex:1">盯住触球那一下的拍型：拍面仰多少，拍子贴着球是往上蹭还是往下蹭。</p></div>`;
+        <p class="hint" style="flex:1">盯住触球那一下的拍型：拍面仰多少，拍子贴着球是往上蹭还是往下蹭。球一落到你这边就看不到了。</p></div>`;
     } else if (S.phase === 'play' || S.phase === 'ask') {
-      const three = S.set.choices === 3;
+      const three = S.set.choices === 3, pure = S.set.kinds.pure, side = S.set.kinds.side;
+      const up = pure && side ? ['上旋', '侧上也算'] : pure ? ['上旋', ''] : ['侧上', ''], dn = pure && side ? ['下旋', '侧下也算'] : pure ? ['下旋', ''] : ['侧下', ''];
       st.innerHTML = `<div class="row"><div class="answers">
-          <button type="button" class="ans up" data-ans="top" disabled><b>侧上</b><small>键盘 ↑</small></button>
-          ${three ? '<button type="button" class="ans" data-ans="flat" disabled><b>不转</b><small>键盘 →</small></button>' : ''}
-          <button type="button" class="ans down" data-ans="back" disabled><b>侧下</b><small>键盘 ↓</small></button>
+          <button type="button" class="ans up" data-ans="top" disabled><b>${up[0]}</b><small>${up[1] ? up[1] + ' · ' : ''}键盘 ↑</small></button>
+          ${three ? '<button type="button" class="ans" data-ans="flat" disabled><b>不转</b><small>到你面前基本不转 · 键盘 →</small></button>' : ''}
+          <button type="button" class="ans down" data-ans="back" disabled><b>${dn[0]}</b><small>${dn[1] ? dn[1] + ' · ' : ''}键盘 ↓</small></button>
         </div><button type="button" class="btn" data-act="again">再看一遍</button></div>`;
       S.live = null;
     } else if (S.phase === 'review') {
       const ok = S.answer === sv.cls;
-      st.innerHTML = `<div class="row"><div class="verdict ${ok ? 'ok' : 'no'}"><b>${ok ? '对了' : '看错了'}，是${CLS[sv.cls]}</b><span>${brief(sv)}<i>${describe(sv)}</i></span></div>
-        <button type="button" class="btn" data-act="contact">再看触球</button><button type="button" class="btn" data-act="spin">看球怎么转</button><button type="button" class="btn primary" data-act="next">下一球<kbd>空格</kbd></button></div>`;
+      st.innerHTML = `<div class="row"><div class="verdict ${ok ? 'ok' : 'no'}"><b>${ok ? '对了' : '看错了'}，是${clsName(sv)}</b><span>${brief(sv)}<i>${describe(sv)}</i><i>${S.ansWhen}</i></span></div>
+        <button type="button" class="btn" data-act="replay">慢放重看</button><button type="button" class="btn" data-act="spin">看球怎么转</button><button type="button" class="btn primary" data-act="next">下一球<kbd>空格</kbd></button></div>`;
     }
   }
   $('#stage').addEventListener('click', (e) => {
@@ -656,11 +743,12 @@ function start(hot) {
     if (b.dataset.ans) return answer(b.dataset.ans);
     const act = b.dataset.act;
     if (act === 'serve') playServe();
-    else if (act === 'again') { const sv = S.serve; S.phase = 'play'; S.t = sv.tStart + 0.25; S.rate = S.set.speed; S.playing = true; S.stopAt = null; S.live = null; backToHome(false); renderStage(); }
+    else if (act === 'again') runPlay();
     else if (act === 'next') { S.dirty = true; playServe(); }
-    else if (act === 'contact') showContact(true);
+    else if (act === 'replay') showContact(true);
+    else if (act === 'hit') showContact(false);
     else if (act === 'spin') showSpin();
-    else if (act === 'labplay') { S.spinView = false; S.t = S.serve.tStart + 0.3; S.rate = 0.25; S.playing = true; S.stopAt = null; if (S.view === 'ball' || S.view === 'contact') setView(S.home === 'recv' ? 'side' : S.home); syncTransport(); }
+    else if (act === 'labplay') { S.spinView = false; S.auto = null; S.t = S.serve.tStart + 0.3; S.rate = 0.25; S.playing = true; S.stopAt = null; if (S.view === 'ball' || S.view === 'contact') setView(S.home === 'recv' ? 'side' : S.home); syncTransport(); }
   });
 
   // ================= 进度条 =================
@@ -670,7 +758,7 @@ function start(hot) {
     $('#transport').hidden = !reviewing();
     if (was !== $('#transport').hidden) inset();
     $('#btnPlay').textContent = S.playing ? '暂停' : '播放';
-    $$('#rateSeg button').forEach((b) => b.classList.toggle('on', Math.abs(parseFloat(b.dataset.rate) - S.rate) < 1e-6));
+    $$('#rateSeg button').forEach((b) => b.classList.toggle('on', !S.auto && Math.abs(parseFloat(b.dataset.rate) - S.rate) < 1e-6));
     $('#tgAids').classList.toggle('on', S.aids); $('#tgTrail').classList.toggle('on', S.trail);
   }
   function tickTransport() {
@@ -678,17 +766,17 @@ function start(hot) {
     if (document.activeElement !== scrub || S.playing) scrub.value = String(Math.round(((S.t - sv.tStart) / (sv.tEnd - sv.tStart)) * 1000));
     $('#timeLbl').textContent = (S.t >= 0 ? '+' : '−') + Math.abs(S.t).toFixed(3) + ' s';
   }
-  scrub.addEventListener('input', () => { const sv = S.serve; if (!sv) return; S.playing = false; S.stopAt = null; S.t = sv.tStart + (parseFloat(scrub.value) / 1000) * (sv.tEnd - sv.tStart); syncTransport(); });
+  scrub.addEventListener('input', () => { const sv = S.serve; if (!sv) return; S.playing = false; S.stopAt = null; S.auto = null; S.t = sv.tStart + (parseFloat(scrub.value) / 1000) * (sv.tEnd - sv.tStart); syncTransport(); });
   $('#btnPlay').addEventListener('click', () => {
     const sv = S.serve; if (!sv) return;
     S.stopAt = null;
-    if (!S.playing && S.t >= sv.tEnd - 1e-3) S.t = -0.3;
+    if (!S.playing && S.t >= sv.tEnd - 1e-3) S.t = Math.max(sv.tStart, sv.tSwing0 - 0.2);
     S.playing = !S.playing;
     // 从触球特写接着往下放：球马上就飞出画面了，换回能看到整条球路的视角
-    if (S.playing && S.view === 'contact' && S.t >= -0.01) setView(S.mode === 'lab' && S.home === 'recv' ? 'side' : S.home);
+    if (S.playing && S.view === 'contact' && S.t >= sv.tSwingEnd && !S.auto) setView(S.mode === 'lab' && S.home === 'recv' ? 'side' : S.home);
     syncTransport();
   });
-  $('#rateSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S.rate = parseFloat(b.dataset.rate); syncTransport(); });
+  $('#rateSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S.auto = null; S.rate = parseFloat(b.dataset.rate); syncTransport(); });
   function jump(where) { // 右侧三个时刻：镜头跟到那个时刻球所在的地方
     const sv = S.serve; if (!sv) return;
     if (where === 'hit') return showContact(false);
@@ -710,19 +798,21 @@ function start(hot) {
     root.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; setv(b.dataset[attr]); syncUI(); });
     return () => $$('button', root).forEach((b) => b.classList.toggle('on', String(get()) === b.dataset[attr]));
   };
-  const multiBind = (sel, attr, arrOrObj, keyOf) => {
+  const multiBind = (sel, attr, arrOrObj, keyOf, after) => {
     const root = $(sel);
     root.addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
       const k = keyOf(b.dataset[attr]); const o = arrOrObj();
       o[k] = !o[k];
       if (!Object.values(o).some(Boolean)) o[k] = true; // 至少留一个
+      if (after) after();
       touch(); syncUI();
     });
     return () => $$('button', root).forEach((b) => b.classList.toggle('on', !!arrOrObj()[keyOf(b.dataset[attr])]));
   };
   const syncers = [
     multiBind('#typeChips', 'type', () => S.set.types, (v) => v),
+    multiBind('#kindChips', 'kind', () => S.set.kinds, (v) => v, () => { custom(); if (S.set.kinds.pure) S.set.choices = 3; }), // "转与不转"就得分出不转
     multiBind('#posChips', 'pos', () => S.set.pos, (v) => parseInt(v, 10)),
     multiBind('#lenChips', 'len', () => S.set.len, (v) => parseInt(v, 10)),
     segBind('#handSeg', 'hand', () => S.set.hand, (v) => { S.set.hand = parseInt(v, 10); touch(); }),
@@ -735,10 +825,11 @@ function start(hot) {
   $('#presetChips').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     const p = PRESETS[b.dataset.preset];
-    Object.assign(S.set, { preset: b.dataset.preset, fake: p.fake, choices: p.choices, speed: p.speed, watch: p.watch, style: p.style });
+    Object.assign(S.set, { preset: b.dataset.preset, kinds: { ...p.kinds }, fake: p.fake, choices: p.choices, speed: p.speed, watch: p.watch, player: p.player });
     touch(); syncUI();
   });
-  $('#styleSel').addEventListener('change', (e) => { S.set.style = e.target.value; custom(); touch(); syncUI(); });
+  $('#playerSel').innerHTML = '<option value="random">每球随机换一个人</option>' + PLAYER_KEYS.map((k) => `<option value="${k}">${PLAYERS[k].name}</option>`).join('');
+  $('#playerSel').addEventListener('change', (e) => { S.set.player = e.target.value; custom(); touch(); syncUI(); });
   $('#btnLeft').addEventListener('click', () => { $('#left').classList.toggle('open'); $('#right').classList.remove('open'); });
   $('#btnRight').addEventListener('click', () => { $('#right').classList.toggle('open'); $('#left').classList.remove('open'); });
   $('#views').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.spinView = false; S.home = b.dataset.view; setView(b.dataset.view); } });
@@ -747,10 +838,12 @@ function start(hot) {
     syncers.forEach((f) => f());
     $$('#presetChips button').forEach((b) => b.classList.toggle('on', b.dataset.preset === S.set.preset));
     $('#presetNote').textContent = PRESETS[S.set.preset] ? PRESETS[S.set.preset].note : '自定义：下面每一项都按你选的来。';
-    $('#styleSel').value = S.set.style;
+    $('#playerSel').value = S.set.player;
+    $('#playerNote').textContent = S.set.player === 'random' ? '站姿、抛球高度、引拍大小、收拍方式每球都换。' : PLAYERS[S.set.player].note + '。';
     $$('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.mode === S.mode));
     $('#panelPractice').hidden = S.mode !== 'practice'; $('#panelLab').hidden = S.mode !== 'lab';
     $('#readBody').hidden = !reviewing(); $('#readLock').hidden = reviewing(); $('#right').classList.toggle('locked', !reviewing());
+    $('#spinCtl').hidden = !S.spinView;
     $('#pending').hidden = !(S.mode === 'practice' && S.dirty && S.phase !== 'review');
     syncTransport();
   }
@@ -779,17 +872,17 @@ function start(hot) {
     const L = S.lab;
     const sv = manualServe({ ...L, vr: L.vr.slice(), rubber: { ...P.rubber, mu: L.mu, et0: L.et } });
     adopt(sv);
-    S.phase = 'lab'; S.playing = false; S.stopAt = null; S.t = 0; S.spinView = false;
+    S.phase = 'lab'; S.playing = false; S.stopAt = null; S.auto = null; S.t = 0; S.spinView = false;
     const el = $('#labStatus');
     el.className = sv.legal ? 'ok' : 'bad';
-    el.textContent = sv.legal ? `合法发球：落在你这边离网 ${sv.verdict.b2.p[2].toFixed(2)} m，过网余量 ${(sv.verdict.net.clear * 100).toFixed(1)} cm，到你面前是${CLS[sv.cls]}` : `不合法：${sv.verdict.why}`;
-    renderStage(); syncTransport();
+    el.textContent = sv.legal ? `合法发球：落在你这边离网 ${sv.verdict.b2.p[2].toFixed(2)} m，过网余量 ${(sv.verdict.net.clear * 100).toFixed(1)} cm，到你面前是${{ top: '上旋', back: '下旋', flat: '不转' }[sv.cls]}` : `不合法：${sv.verdict.why}`;
+    renderStage(); syncUI();
   }
   $('#labSliders').addEventListener('input', (e) => { const k = e.target.id.replace('lab_', ''); labSet(k, parseFloat(e.target.value)); syncLabSliders(); rebuildLab(); });
   $('#labType').addEventListener('change', (e) => { S.lab.type = e.target.value; rebuildLab(); });
   $$('.labEx').forEach((b) => b.addEventListener('click', () => {
     let sv = null;
-    for (let k = 0; k < 8 && !sv; k++) sv = generateServe({ type: S.lab.type, hand: 1, intent: b.dataset.ex, pos: 1, len: pick(['short', 'long']), style: 'standard', fake: false });
+    for (let k = 0; k < 8 && !sv; k++) sv = generateServe({ type: S.lab.type, hand: 1, intent: b.dataset.ex, pos: 1, len: pick(['short', 'long']), player: 'std', fake: false });
     if (!sv) return;
     Object.assign(S.lab, toLab(sv), { mu: P.rubber.mu, et: P.rubber.et0 });
     syncLabSliders(); rebuildLab(); setView('side');
@@ -798,12 +891,13 @@ function start(hot) {
   function seedLab() {
     if (labSeeded) return; labSeeded = true;
     for (let k = 0; k < 8; k++) {
-      const sv = generateServe({ type: S.lab.type, hand: 1, intent: 'back', pos: 1, len: 'long', style: 'standard', fake: false });
+      const sv = generateServe({ type: S.lab.type, hand: 1, intent: 'back', pos: 1, len: 'long', player: 'std', fake: false });
       if (sv) { Object.assign(S.lab, toLab(sv)); break; }
     }
   }
   function setMode(m) {
-    S.mode = m; S.spinView = false;
+    S.mode = m; S.spinView = false; S.auto = null;
+    $('#spinMore').open = m === 'lab'; // 实验台里转速读数是主角，练习时先收着
     if (m === 'lab') { seedLab(); syncLabSliders(); rebuildLab(); setView('side'); }
     else { nextServe(); setView('recv'); }
     try { if (location.hash !== '#' + m) history.replaceState(null, '', '#' + m); } catch (e) { /* 忽略 */ }
@@ -825,7 +919,7 @@ function start(hot) {
       else if (e.key === 'ArrowDown') { e.preventDefault(); answer('back'); }
       else if (e.key === 'ArrowRight' && $('#stage [data-ans="flat"]')) { e.preventDefault(); answer('flat'); }
     } else if (reviewing() && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-      e.preventDefault(); S.playing = false; S.stopAt = null; S.t = clamp(S.t + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 0.02 : 0.002), S.serve.tStart, S.serve.tEnd); syncTransport();
+      e.preventDefault(); S.playing = false; S.stopAt = null; S.auto = null; S.t = clamp(S.t + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 0.02 : 0.002), S.serve.tStart, S.serve.tEnd); syncTransport();
     }
   });
 
@@ -836,9 +930,14 @@ function start(hot) {
     const sv = S.serve;
     if (sv) {
       if (S.playing) {
+        if (S.auto) {
+          S.rate = autoRate(sv, S.t);
+          // 收拍看完了：镜头退回你选的视角，接着看球飞过来
+          if (S.auto.cam && S.t > sv.tSwingEnd + 0.1 && !S.spinView) { S.auto.cam = false; setView(S.mode === 'lab' && S.home === 'recv' ? 'side' : S.home); }
+        }
         S.t += dt * S.rate;
-        if (S.stopAt !== null && S.t >= S.stopAt) { S.t = S.stopAt; S.playing = false; S.stopAt = null; syncTransport(); }
-        else if (S.t >= sv.tEnd) { S.t = sv.tEnd; S.playing = false; onPlayEnd(); }
+        if (S.stopAt !== null && S.t >= S.stopAt) { S.t = S.stopAt; S.playing = false; S.stopAt = null; onPlayEnd(); }
+        else if (S.t >= sv.tEnd) { S.t = sv.tEnd; S.playing = false; S.auto = null; onPlayEnd(); }
       }
       if (S.mode === 'practice' && (S.phase === 'play' || S.phase === 'ask')) { // 触球之后才能作答
         const live = S.t >= 0 || S.phase === 'ask';
@@ -862,11 +961,12 @@ function start(hot) {
   resize();
   const m0 = location.hash === '#lab' ? 'lab' : 'practice';
   S.mode = m0;
+  $('#spinMore').open = m0 === 'lab';
   if (m0 === 'lab') { seedLab(); syncLabSliders(); rebuildLab(); setView('side', true); } else { nextServe(); setView('recv', true); }
   syncUI(); renderStage();
   window.__pp = { S, setView, nextServe, playServe, answer, jump, setMode, showContact, showSpin, camera, controls,
     cam: (p, t) => { camAnim = null; camera.position.set(p[0], p[1], p[2]); controls.target.set(t[0], t[1], t[2]); },
-    force: (cfg) => { const sv = generateServe(cfg); if (!sv) return null; sv.cfg = cfg; adopt(sv); S.dirty = false; S.phase = 'ready'; S.answer = null; S.t = sv.tStart; S.playing = false; S.spinView = false; syncUI(); renderStage(); return sv.cls; } };
+    force: (cfg) => { const sv = generateServe(cfg); if (!sv) return null; sv.cfg = cfg; adopt(sv); S.dirty = false; S.phase = 'ready'; S.answer = null; S.t = sv.tStart; S.playing = false; S.auto = null; S.spinView = false; syncUI(); renderStage(); return sv.cls; } };
   requestAnimationFrame(frame);
 }
 

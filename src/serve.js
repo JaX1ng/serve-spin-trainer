@@ -6,7 +6,7 @@
 
 import { P, collide, simulate, add, sub, mul, dot, cross, len, norm, lerp, addmul } from './physics.js';
 import { qMul, qAxis, qRot, qFromBasis, qSlerp, qFromTo, smooth } from './quat.js';
-import { makeBody } from './body.js';
+import { buildMotion } from './motion.js';
 export { qRot } from './quat.js';
 
 export const RPS = 2 * Math.PI;
@@ -43,17 +43,34 @@ export const TYPES = {
 };
 export const TYPE_KEYS = ['pendulum', 'reverse', 'hook', 'backhand'];
 
-// ---------- 选手风格 ----------
-// rise: 抛球高度(离手后上升, m)；kappa: 摩擦"薄"的程度(°)，越大越转；arcR: 挥拍圆弧半径(手腕小动作 ↔ 大臂)；
-// pre/post: 触球前/后挥过的弧度；clear: 过网高度余量(m)；wMax: 这名选手能发出的最大转速(转/秒)
-export const STYLES = {
-  standard: { name: '标准中抛', wMax: [40, 54], rise: [0.30, 0.55], kappa: [31, 42], arcR: [0.22, 0.30], pre: [1.2, 1.5], post: [1.0, 1.3], clear: [0.012, 0.04] },
-  wrist: { name: '手腕小动作', wMax: [36, 50], rise: [0.22, 0.40], kappa: [29, 41], arcR: [0.13, 0.17], pre: [1.0, 1.3], post: [0.8, 1.1], clear: [0.012, 0.035] },
-  arm: { name: '大臂钟摆', wMax: [44, 58], rise: [0.35, 0.65], kappa: [33, 43], arcR: [0.33, 0.42], pre: [1.1, 1.4], post: [1.1, 1.4], clear: [0.015, 0.05] },
-  high: { name: '高抛', wMax: [46, 62], rise: [1.0, 1.7], kappa: [35, 43], arcR: [0.20, 0.30], pre: [1.2, 1.5], post: [1.0, 1.3], clear: [0.015, 0.05] },
-  low: { name: '低抛快节奏', wMax: [34, 48], rise: [0.17, 0.24], kappa: [27, 40], arcR: [0.16, 0.26], pre: [1.0, 1.3], post: [0.9, 1.2], clear: [0.010, 0.03] },
+// ---------- 选手 ----------
+// 每个人的发球都不一样：站多低、抛多高、引拍多大、手腕还是大臂发力、触球后怎么收。这里是几种常见的类型。
+// 物理相关：rise 抛球高度(离手后上升, m)；kappa 摩擦"薄"的程度(°)；wMax 这个人能发出的最大转速(转/秒)；clear 过网余量(m)；hc 触球高度的习惯偏移
+// 动作相关(mo)：py 骨盆高度(蹲多低)；lean 前倾的偏移(°)；tempo 挥拍快慢；wrist 手腕发力的比重；bs 引拍幅度；follow 收拍幅度；
+//   rest 抛完球那只手收到哪儿；followUp 抛球手顺势上送多高；fakes 会做哪几种假动作
+export const PLAYERS = {
+  std: { name: '标准中抛', note: '抛球齐眉，弯腰适中，动作不大不小', shirt: 0x2c9c8c,
+    wMax: [40, 54], rise: [0.30, 0.55], kappa: [31, 42], clear: [0.012, 0.04], hc: 0,
+    mo: { py: 0.80, lean: 0, tempo: 0.25, wrist: 1, bs: 1, follow: 1, rest: { side: 'wing', front: 'low' }, followUp: 0.10, fakes: ['lift', 'chop'] } },
+  crouch: { name: '低蹲手腕型', note: '蹲得很低、脸快贴到台面，引拍小，靠手腕一抖', shirt: 0xd8572a,
+    wMax: [38, 52], rise: [0.22, 0.40], kappa: [30, 42], clear: [0.010, 0.032], hc: -0.02,
+    mo: { py: 0.74, lean: 8, rise: 24, tempo: 0.21, wrist: 1.35, bs: 0.7, follow: 0.7, stance: 1.08, rest: { side: 'back', front: 'tuck' }, followUp: 0.06, fakes: ['tuck', 'lift'] } },
+  high: { name: '高抛大摆型', note: '球抛过头顶一米多，引拍大，大臂带着甩，转得凶', shirt: 0x7a52c7,
+    wMax: [46, 62], rise: [1.0, 1.7], kappa: [35, 43], clear: [0.015, 0.05], hc: 0,
+    mo: { py: 0.82, lean: -2, tempo: 0.30, wrist: 0.8, bs: 1.35, follow: 1.25, rise: 32, rest: { side: 'wing', front: 'low' }, followUp: 0.22, fakes: ['lift', 'chop'] } },
+  quick: { name: '站直快节奏', note: '站得比较直，抛得低，出手快', shirt: 0xe0b23a,
+    wMax: [34, 48], rise: [0.17, 0.24], kappa: [27, 40], clear: [0.010, 0.03], hc: 0.01,
+    mo: { py: 0.86, lean: -12, rise: 18, yaw: 12, tempo: 0.20, wrist: 1.1, bs: 0.75, follow: 0.85, bsT: 0.3, rest: { side: 'hip', front: 'low' }, followUp: 0.05, fakes: ['tuck', 'chop'] } },
+  elbow: { name: '抬肘内扣型', note: '肘架得高，手腕往里扣得深，拍头垂得低', shirt: 0x3a78d6,
+    wMax: [42, 56], rise: [0.35, 0.65], kappa: [32, 43], clear: [0.012, 0.04], hc: 0.01,
+    mo: { py: 0.80, lean: 3, tempo: 0.26, wrist: 1.25, bs: 1.1, follow: 1, wd: -18, rest: { side: 'hip', front: 'tuck' }, followUp: 0.12, fakes: ['lift', 'tuck'] } },
+  showy: { name: '收拍幅度大', note: '触球后的动作特别大（开了假动作时尤其明显）', shirt: 0xc7386b,
+    wMax: [40, 54], rise: [0.30, 0.60], kappa: [31, 42], clear: [0.012, 0.04], hc: 0,
+    mo: { py: 0.80, lean: 0, tempo: 0.24, wrist: 1.1, bs: 1, follow: 1.3, fakeAmp: 1.35, rest: { side: 'wing', front: 'low' }, followUp: 0.14, fakes: ['lift', 'chop', 'tuck'] } },
 };
-export const STYLE_KEYS = ['standard', 'wrist', 'arm', 'high', 'low'];
+export const PLAYER_KEYS = ['std', 'crouch', 'high', 'quick', 'elbow', 'showy'];
+// 旧名字（上一版叫"拍型习惯"）→ 现在的选手
+const PLAYER_ALIAS = { standard: 'std', wrist: 'crouch', arm: 'high', high: 'high', low: 'quick' };
 
 // ---------- 旋转分解（相对球的飞行方向） ----------
 /** top>0 上旋；side = ω_y (>0 俯视逆时针)；cork = 沿飞行方向的"螺旋"分量 */
@@ -402,9 +419,9 @@ function sampleS(S, t) {
   };
 }
 
-/** 把抛球、触球、飞行、挥拍拼成一个可按时间采样的发球记录（t=0 为触球瞬间） */
+/** 把抛球、触球、飞行、人的动作拼成一个可按时间采样的发球记录（t=0 为触球瞬间） */
 function assemble(base) {
-  const { toss, pc, n, vr, col, sim, T, hand, swing } = base;
+  const { toss, pc, n, vr, col, sim, T, hand } = base;
   const verdict = judge(sim);
   const launch = col ? spinParts(col.w, col.v) : null;
   let arrive = null;
@@ -412,8 +429,6 @@ function assemble(base) {
   const cls = arrive ? classOf(arrive.top) : null;
   const tRel = -toss.T;
   const tPalm0 = tRel - toss.Ta;
-  const tStart = Math.min(tPalm0, swing.tReady) - 0.45;
-  const tEnd = Math.max(sim.end.t, swing.tDone) + 0.05;
   const q0 = [0, 0, 0, 1];
   const ballAt = (t) => {
     if (t >= 0 && col) { const s = sampleS(sim.S, t); s.phase = 'flight'; return s; }
@@ -426,33 +441,20 @@ function assemble(base) {
     const tau = t - tPalm0, acc = toss.u0 / toss.Ta;
     return { p: [pc[0], toss.yStart + 0.5 * acc * tau * tau, pc[2]], v: [0, acc * tau, 0], w: [0, 0, 0], q: q0, phase: 'hand' };
   };
-  // 抛球手的手掌位置：托着球 → 跟着往上送 → 球离手
-  const palmAt = (t) => {
-    const b = ballAt(Math.min(t, tRel)).p;
-    return { p: [b[0], b[1] - P.R - 0.02, b[2]], after: t - tRel };
-  };
-  let body = null, clipBall = 0;
-  if (!base.lab) {
-    body = makeBody({ T, hand, pc, pose: swing.pose, face: T.face, tReady: swing.tReady, tDone: swing.tDone, palmAt, ballAt, tossY: [toss.yStart, toss.apex] });
-    // 触球前球有没有提前"穿过"拍面
-    for (let t = -swing.T1; t < -0.004; t += 0.004) {
-      const pz = swing.pose(t), nz = qRot(pz.q, [0, 0, T.face]), bp = ballAt(t).p;
-      const rel = sub(bp, pz.b), dn = dot(rel, nz), rho = len(sub(rel, mul(nz, dn)));
-      if (rho < 0.078 && Math.abs(dn) < P.R - 0.004) clipBall = Math.max(clipBall, P.R - Math.abs(dn));
-    }
+  let body = null, racketAt, tReady, tDone, tSw0, tSw1, headDir = null;
+  if (base.lab) {
+    // 实验台：没有人，只有一支按圆弧挥的球拍
+    const sw = base.swing;
+    racketAt = (t) => { const pz = sw.pose(t), zw = qRot(pz.q, [0, 0, T.face]); return { c: addmul(pz.b, zw, -0.0055), q: pz.q }; };
+    tReady = sw.tReady; tDone = sw.tDone; tSw0 = -sw.T1; tSw1 = sw.tDone;
+  } else {
+    const m = buildMotion({ type: base.type, kind: base.kind, hand, face: T.face, pc, n, vr, vOut: col ? col.v : null, off: base.off, tRel, tPalm0, tossY: [toss.yStart, toss.apex], ballAt, pl: base.mo, fake: base.fakeKind, rng: base.rng, dbg: base.dbg });
+    if (!m.ok) return { fail: 'motion:' + m.why };
+    body = m; racketAt = m.racketAt; tReady = m.tReady; tDone = m.tDone; tSw0 = m.tSwing0; tSw1 = m.tSwingEnd;
+    headDir = m.at(0).racket.l;
   }
-  // 球离拍后别从持拍的手臂里穿过去
-  let clipArm = 0;
-  if (body && col) {
-    for (let t = 0.006; t < 0.16; t += 0.01) {
-      const J = body.at(t), bp = ballAt(t).p;
-      for (const [a, b, rr] of [[J.shP, J.elP, 0.045], [J.elP, J.wrP, 0.038], [J.shF, J.elF, 0.045], [J.elF, J.wrF, 0.04]]) {
-        const ab = sub(b, a), l2 = dot(ab, ab) || 1e-9, u = Math.max(0, Math.min(1, dot(sub(bp, a), ab) / l2));
-        const d = len(sub(bp, addmul(a, ab, u)));
-        if (d < rr + P.R) clipArm = Math.max(clipArm, rr + P.R - d);
-      }
-    }
-  }
+  const tStart = Math.min(tPalm0, tReady) - 0.45;
+  const tEnd = Math.max(sim.end.t, tDone) + 0.05;
   // 触球分析量
   const an = {};
   if (col) {
@@ -479,10 +481,12 @@ function assemble(base) {
     // 触到球的哪儿：接触点在球心的 -n 方向。side 用接球者看到的左右（+1 = 画面右侧）
     an.spotUp = -n[1];                   // >0 触球的上半部，<0 触球的下半部
     an.spotSide = -dot(n, h);
+    an.off = base.off ? base.off.slice() : [0, 0]; // 用拍面的哪儿碰的球：[横向, 沿拍柄方向(正 = 靠拍头)]
+    an.head = headDir;                   // 触球时拍头指的方向
   }
   return {
-    ...base, verdict, legal: verdict.legal, launch, arrive, cls, tRel, tPalm0, tStart, tEnd, ballAt, body, an, clipBall, clipArm,
-    racketAt: swing.pose,
+    ...base, verdict, legal: verdict.legal, launch, arrive, cls, tRel, tPalm0, tStart, tEnd, ballAt, body, an,
+    racketAt, tSwing0: tSw0, tSwingEnd: tSw1,
     events: sim.ev,
   };
 }
@@ -495,11 +499,12 @@ function forward(pc, vb, n, vr, surf) {
 }
 
 /**
- * 生成一个发球。cfg: { type, hand(+1 右手/-1 左手), intent('top'|'back'|'flat'), pos(-1/0/1), len('short'|'long'), style, fake }
- * 失败返回 null（极少数落点/风格组合在物理上发不出来）。
+ * 生成一个发球。cfg: { type, hand(+1 右手/-1 左手), intent('top'|'back'|'flat')：到接球者面前的上下旋类别,
+ *   kind('side' 带侧旋 | 'pure' 基本不带侧旋的上旋 / 下旋 / 不转), pos(-1/0/1), len('short'|'long'), player, fake }
+ * 失败返回 null（极少数落点/选手组合在物理上发不出来，或者人做不出那个动作）。
  */
 export function generateServe(cfg, rng = Math.random) {
-  for (let attempt = 0; attempt < 16; attempt++) {
+  for (let attempt = 0; attempt < 18; attempt++) {
     const s = tryGenerate(cfg, rng, attempt);
     if (s) { s.attempts = attempt + 1; return s; }
   }
@@ -509,8 +514,10 @@ export function generateServe(cfg, rng = Math.random) {
 function tryGenerate(cfg, rng, attempt) {
   const fail = (why) => { if (cfg._dbg) cfg._dbg.push(why); return null; };
   const T = TYPES[cfg.type], hand = cfg.hand || 1;
-  const styleKey = cfg.style && STYLES[cfg.style] ? cfg.style : STYLE_KEYS[Math.floor(rng() * STYLE_KEYS.length)];
-  const st = STYLES[styleKey];
+  const pkey0 = cfg.player || PLAYER_ALIAS[cfg.style] || cfg.style;
+  const playerKey = PLAYERS[pkey0] ? pkey0 : PLAYER_KEYS[Math.floor(rng() * PLAYER_KEYS.length)];
+  const st = PLAYERS[playerKey];
+  const kind = cfg.kind === 'pure' ? 'pure' : 'side';
   const side = T.side * hand;
   // 位置：pos = 对手站在画面的左(-1)/中(0)/右(+1)（接球者视角，画面右 = +X）；len = 来球近(short)/远(long)
   let tgt;
@@ -522,10 +529,10 @@ function tryGenerate(cfg, rng, attempt) {
   }
   const lenClass = tgt.z < 0.55 ? 'short' : tgt.z < 0.9 ? 'half' : 'long';
   const xc = cfg.pos === undefined ? hand * U(rng, [0.25, 0.55]) : cfg.pos * 0.42 + (rng() * 2 - 1) * 0.1;
-  const hc = (lenClass === 'long' ? U(rng, [0.09, 0.15]) : lenClass === 'half' ? U(rng, [0.10, 0.18]) : U(rng, [0.13, 0.22])) + (T.lift || 0);
+  const hc = (lenClass === 'long' ? U(rng, [0.09, 0.15]) : lenClass === 'half' ? U(rng, [0.10, 0.18]) : U(rng, [0.13, 0.22])) + (T.lift || 0) + (st.hc || 0);
   // 长球触球点低，离端线远一点，拍子挥到最低点时还在台外
   const zc = -P.tableL / 2 - (lenClass === 'short' ? U(rng, [0.1, 0.2]) : U(rng, [0.17, 0.28])) - (T.back || 0);
-  const yc = P.tableY + hc;
+  const yc = P.tableY + Math.max(0.07, hc);
   let rise = U(rng, st.rise);
   if (cfg.intent === 'back' && attempt > 5) rise = Math.max(rise, 0.4 + 0.05 * attempt); // 下旋不够就抛高一点（球落得快，能摩擦得更狠）
   const toss = simToss(xc, zc, P.tableY + U(rng, [0.07, 0.13]), rise, yc);
@@ -534,57 +541,96 @@ function tryGenerate(cfg, rng, attempt) {
   const cap = Math.atan(P.rubber.mu) - 2 * DEG;
   let kappa = Math.min(U(rng, st.kappa) * DEG, cap);
   let wMax = U(rng, st.wMax) * RPS;
-  let chi;
-  if (cfg.intent === 'top') {
-    // 偶尔离拍时几乎没有上下旋（"不转"发球）：两跳台面摩擦会让它到位时带上旋，所以仍归在"侧上"这一类
-    chi = (rng() < 0.2 ? U(rng, [-6, 10]) : U(rng, [12, 62])) * DEG;
-    // 又短又强的上旋几乎发不出来（一落台就往前窜）：短球的上旋成分自然要轻一些
-    if (lenClass === 'short') { chi = Math.min(chi, U(rng, [10, 38]) * DEG); wMax *= 0.8; }
-  } else if (cfg.intent === 'back') { chi = -U(rng, [58, 80]) * DEG; kappa = Math.min(cap, kappa + (4 + attempt) * DEG); wMax *= 1.1; }
-  else chi = -U(rng, [25, 45]) * DEG;
-  const mkRule = (ch) => (v) => spinRule(v, vb, ch, kappa, side, wMax);
+  let chi, dead = false;
+  if (kind === 'side') {
+    if (cfg.intent === 'top') {
+      // 偶尔离拍时几乎没有上下旋：两跳台面摩擦会让它到位时往前滚，所以仍归在"上旋"这一类
+      dead = cfg.dead !== undefined ? !!cfg.dead : rng() < 0.2;
+      chi = (dead ? U(rng, [-6, 10]) : U(rng, [12, 62])) * DEG;
+      // 又短又强的上旋几乎发不出来（一落台就往前窜）：短球的上旋成分自然要轻一些
+      if (lenClass === 'short') { chi = Math.min(chi, U(rng, [10, 38]) * DEG); wMax *= 0.8; }
+    } else if (cfg.intent === 'back') { chi = -U(rng, [58, 80]) * DEG; kappa = Math.min(cap, kappa + (4 + attempt) * DEG); wMax *= 1.1; }
+    else chi = -U(rng, [25, 45]) * DEG;
+  } else {
+    // 纯上下旋：旋转轴基本是横的，最多带一点点侧旋
+    const tilt = U(rng, [0, 10]) * DEG;
+    if (cfg.intent === 'top') {
+      // 一半是真的往上蹭出来的上旋；另一半是"顶"出来的：几乎不摩擦，离拍不转，落台后自己往前滚
+      dead = cfg.dead !== undefined ? !!cfg.dead : rng() < 0.45;
+      if (dead) { chi = -(90 * DEG - tilt * 1.5); kappa = U(rng, [1.5, 4.5]) * (lenClass === 'long' ? 0.8 : 1) * DEG; }
+      else { chi = 90 * DEG - tilt; if (lenClass === 'short') { kappa *= 0.6; wMax *= 0.75; } }
+    } else { chi = -(90 * DEG - tilt); if (cfg.intent === 'back') { kappa = Math.min(cap, kappa + (4 + attempt) * DEG); wMax *= 1.12; } }
+  }
+  const mkRule = (ch, kap) => (v) => spinRule(v, vb, ch, kap, side, wMax);
   // 长球多为"急长"(第一跳靠近本方端线)，偶尔是弧线高一点的慢长球；短球第一跳靠近球网
   const branch = lenClass === 'long' ? 'fast' : lenClass === 'short' ? (rng() < 0.9 ? 'slow' : 'fast') : rng() < 0.6 ? 'slow' : 'fast';
   const cT = U(rng, st.clear);
-  let Ln = findLaunch(pc, mkRule(chi), tgt, branch, cT);
+  let Ln = findLaunch(pc, mkRule(chi, kappa), tgt, branch, cT);
   if (!Ln) return fail('launch');
 
-  // 下旋/不转：按"两跳之后到接球者面前"的上下旋分量来调 chi（台面摩擦每跳都会吃掉一部分下旋）
+  // 下旋 / 不转：按"两跳之后到接球者面前"的上下旋分量来调（台面摩擦每跳都会吃掉一部分下旋）。
+  // 带侧旋的球调旋转轴的方位 chi；纯上下旋的球调摩擦的薄厚 kappa（这就是"转与不转"）
   if (cfg.intent !== 'top') {
-    const want = cfg.intent === 'back' ? -U(rng, [6.5, 20]) * RPS : U(rng, [-2.5, 2.5]) * RPS;
-    const arrTop = (ch, warm) => {
-      const r = solveLaunch(pc, mkRule(ch), tgt, Ln.vy0, [warm[0], warm[2]]);
+    const want = cfg.intent === 'back' ? -U(rng, kind === 'pure' ? [7.5, 24] : [6.5, 20]) * RPS : U(rng, [-2.5, 2.5]) * RPS;
+    const arrTop = (ch, kap, warm) => {
+      const r = solveLaunch(pc, mkRule(ch, kap), tgt, Ln.vy0, [warm[0], warm[2]]);
       if (!r) return null;
-      return { top: spinParts(r.info.b2.wOut, r.info.b2.vOut).top, chi: ch, r };
+      return { top: spinParts(r.info.b2.wOut, r.info.b2.vOut).top, chi: ch, kap, r };
     };
-    // 从当前 chi 出发一步步挪（连续延拓），直到把目标夹住，再二分
-    let cur = arrTop(chi, Ln.v);
-    if (!cur) return fail('chi0');
-    const dir = cur.top > want ? -1 : 1; // 上下旋分量随 chi 单调增
-    let other = null;
-    for (let k = 0; k < 14 && !other; k++) {
-      const nx = Math.max(-88 * DEG, Math.min(30 * DEG, cur.chi + dir * 9 * DEG));
-      if (nx === cur.chi) break;
-      const f = arrTop(nx, cur.r.v);
-      if (!f) break;
-      if ((f.top - want) * dir >= 0) other = f; else cur = f;
-    }
-    if (!other) {
-      // 夹不住：下旋已经加到头了。只要到位时还算下旋就接受，否则这次作废
-      if (cfg.intent === 'back' && cur.top < -(TH_RPS + 1) * RPS) { chi = cur.chi; Ln = cur.r; }
-      else return fail('not-enough-back');
-    } else {
-      let lo = dir < 0 ? other : cur, hi = dir < 0 ? cur : other; // lo.top <= want <= hi.top
-      for (let k = 0; k < 7; k++) {
-        const fm = arrTop((lo.chi + hi.chi) / 2, lo.r.v);
-        if (!fm) break;
-        if (fm.top > want) hi = fm; else lo = fm;
+    if (kind === 'side') {
+      // 从当前 chi 出发一步步挪（连续延拓），直到把目标夹住，再二分
+      let cur = arrTop(chi, kappa, Ln.v);
+      if (!cur) return fail('chi0');
+      const dir = cur.top > want ? -1 : 1; // 上下旋分量随 chi 单调增
+      let other = null;
+      for (let k = 0; k < 14 && !other; k++) {
+        const nx = Math.max(-88 * DEG, Math.min(30 * DEG, cur.chi + dir * 9 * DEG));
+        if (nx === cur.chi) break;
+        const f = arrTop(nx, kappa, cur.r.v);
+        if (!f) break;
+        if ((f.top - want) * dir >= 0) other = f; else cur = f;
       }
-      const best = Math.abs(lo.top - want) < Math.abs(hi.top - want) ? lo : hi;
-      chi = best.chi; Ln = best.r;
+      if (!other) {
+        // 夹不住：下旋已经加到头了。只要到位时还算下旋就接受，否则这次作废
+        if (cfg.intent === 'back' && cur.top < -(TH_RPS + 1) * RPS) { chi = cur.chi; Ln = cur.r; }
+        else return fail('not-enough-back');
+      } else {
+        let lo = dir < 0 ? other : cur, hi = dir < 0 ? cur : other; // lo.top <= want <= hi.top
+        for (let k = 0; k < 7; k++) {
+          const fm = arrTop((lo.chi + hi.chi) / 2, kappa, lo.r.v);
+          if (!fm) break;
+          if (fm.top > want) hi = fm; else lo = fm;
+        }
+        const best = Math.abs(lo.top - want) < Math.abs(hi.top - want) ? lo : hi;
+        chi = best.chi; Ln = best.r;
+      }
+    } else {
+      // 摩擦越薄（kappa 越大）下旋越多。从"几乎不摩擦"一路加到这名选手的极限
+      const kMax = cfg.intent === 'back' ? kappa : cap;
+      let lo = arrTop(chi, kMax, Ln.v);                 // 最转的一头
+      if (!lo) return fail('kap-max');
+      if (lo.top > want) {
+        if (cfg.intent === 'back' && lo.top < -(TH_RPS + 1.5) * RPS) { kappa = lo.kap; Ln = lo.r; }
+        else return fail('not-enough-back');
+      } else {
+        let hi = null, cur = lo;
+        for (let kp = kMax - 6 * DEG; kp > 1 * DEG && !hi; kp -= 6 * DEG) {
+          const f = arrTop(chi, kp, cur.r.v);
+          if (!f) break;
+          if (f.top >= want) hi = f; else { lo = f; cur = f; }
+        }
+        if (!hi) return fail('kap-bracket');
+        for (let k = 0; k < 7; k++) {
+          const fm = arrTop(chi, (lo.kap + hi.kap) / 2, lo.r.v);
+          if (!fm) break;
+          if (fm.top > want) hi = fm; else lo = fm;
+        }
+        const best = Math.abs(lo.top - want) < Math.abs(hi.top - want) ? lo : hi;
+        kappa = best.kap; Ln = best.r;
+      }
     }
     if (Ln.clear < 0.006 || Ln.clear > 0.075) {
-      Ln = findLaunch(pc, mkRule(chi), tgt, branch, cT);
+      Ln = findLaunch(pc, mkRule(chi, kappa), tgt, branch, cT);
       if (!Ln) return fail('relaunch');
     }
   }
@@ -595,22 +641,40 @@ function tryGenerate(cfg, rng, attempt) {
   // —— 正向：球拍速度 + 拍面 → 碰撞 → 飞行。以下一切以正向结果为准 ——
   const { col, sim } = forward(pc, vb, n, vr, P.rubber);
   if (!col || col.regime !== 'grip') return fail('slip');
-  const swing = buildSwing(pc, n, vr, T, hand, st, !!cfg.fake, cfg.intent, rng);
-  if (swing.clipTable) return fail('clip-table');
-  const s = assemble({ type: cfg.type, hand, style: styleKey, intent: cfg.intent, target: tgt, lenClass, toss, pc, n, vr, col, sim, T, swing, chi, kappa, fake: !!cfg.fake });
-  if (!s.legal) return fail('illegal:' + s.verdict.why);
-  if (s.verdict.net.clear < 0.004) return fail('net-margin');
-  const b1 = s.verdict.b1.p, b2 = s.verdict.b2.p;
-  if (Math.abs(b1[0]) > P.tableW / 2 - 0.02 || b1[2] > -0.04) return fail('b1-edge');
-  if (Math.abs(b2[0]) > P.tableW / 2 - 0.02 || b2[2] > P.tableL / 2 - 0.02) return fail('b2-edge');
-  if (s.cls !== cfg.intent) return fail('class:' + s.cls);
-  if (s.clipBall > 0.006) return fail('clip-ball');
-  if (s.body.stats.maxPen > 0.02) return fail('clip-body');
-  if (s.body.stats.reach > 0.02) return fail('reach');
-  if (s.body.stats.tossPen > 0.004) return fail('toss-head');
-  if (s.body.stats.tossReach > 0.003) return fail('toss-reach');
-  if (s.body.stats.freePen > 0.02) return fail('free-hand');
-  if (s.clipArm > 0.008) return fail('clip-arm');
+  // 先看物理结果对不对，再花时间去算人的动作
+  { const jd = judge(sim);
+    if (!jd.legal) return fail('illegal:' + jd.why);
+    if (jd.net.clear < 0.004) return fail('net-margin');
+    const b1 = jd.b1.p, b2 = jd.b2.p;
+    if (Math.abs(b1[0]) > P.tableW / 2 - 0.02 || b1[2] > -0.04) return fail('b1-edge');
+    if (Math.abs(b2[0]) > P.tableW / 2 - 0.02 || b2[2] > P.tableL / 2 - 0.02) return fail('b2-edge');
+    const c0 = classOf(spinParts(jd.arrive.wOut, jd.arrive.vOut).top);
+    if (c0 !== cfg.intent) return fail('class:' + c0); }
+  // 用拍面的哪儿碰球：要转的球多用拍头那一端蹭（那儿走得最快），不想让它转就用靠近拍柄的地方碰
+  const off = [U(rng, [-0.014, 0.014]), dead || cfg.intent === 'flat' ? U(rng, [-0.046, -0.012]) : cfg.intent === 'back' ? U(rng, [0.012, 0.05]) : U(rng, [-0.02, 0.04])];
+  // 假动作：真上旋 → 触球后假装往下切；真下旋 / 不转 → 假装往上提；也有人只是飞快地把拍子收回身前
+  let fakeKind = null;
+  if (cfg.fake) {
+    const opts = st.mo.fakes.filter((k) => k === 'tuck' || (k === 'chop') === (cfg.intent === 'top'));
+    fakeKind = cfg.fakeKind || (opts.length ? opts[Math.floor(rng() * opts.length)] : cfg.intent === 'top' ? 'chop' : 'lift');
+  }
+  // 同一个人每次发球也不会一模一样：节奏、引拍幅度各带一点随机
+  const mo = { ...st.mo, tempo: st.mo.tempo * U(rng, [0.92, 1.1]), bs: st.mo.bs * U(rng, [0.88, 1.12]) };
+  const s = assemble({ dbg: cfg._pose, type: cfg.type, hand, player: playerKey, kind, dead, intent: cfg.intent, target: tgt, lenClass, toss, pc, n, vr, col, sim, T, chi, kappa, off, mo, fake: !!cfg.fake, fakeKind, rng });
+  if (s.fail) return fail(s.fail);
+  const ms = s.body.stats;
+  if (cfg._stat) cfg._stat(ms, s);
+  if (ms.nan) return fail('nan');
+  if (ms.early > 0.006) return fail('clip-ball');
+  if (ms.late > 0.008) return fail('clip-ball-after');
+  if (ms.body > 0.03) return fail('clip-body');
+  if (ms.table > 0.015) return fail('clip-table');
+  if (ms.ballBody > 0.012) return fail('ball-body');
+  if (ms.free > 0.035) return fail('free-hand');
+  if (ms.leg > 0.012) return fail('leg');
+  // 接球的人得看得见球：触球前那一下球心不能被发球人自己挡住，整个抛球过程里被挡住的时间也不能长
+  if (ms.hide > -0.012) return fail('hidden');
+  if (ms.hideT > 0.045) return fail('hidden-toss');
   return s;
 }
 
@@ -629,7 +693,7 @@ export function manualServe(lab, rng = Math.random) {
   const st = { arcR: [0.26, 0.26], pre: [1.25, 1.25], post: [1.1, 1.1] };
   const fixed = () => 0.5;
   const swing = buildSwing(pc, n, vr, T, hand, st, false, 'flat', fixed);
-  const s = assemble({ type: lab.type || 'pendulum', hand, style: 'lab', intent: null, target: null, toss, pc, n, vr, col, sim, T, swing, lab: true });
+  const s = assemble({ type: lab.type || 'pendulum', hand, player: 'lab', kind: 'side', intent: null, target: null, toss, pc, n, vr, col, sim, T, swing, lab: true });
   if (!col) s.verdict.why = '拍子没碰到球（拍面是背着球走的）';
   return s;
 }
