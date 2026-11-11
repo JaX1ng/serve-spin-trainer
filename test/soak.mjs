@@ -33,7 +33,7 @@ for (let i = 0; i < N; i++) {
   for (let t = Math.max(tA, -0.3); t < 0.25; t += 0.006) ts.push(t);
   for (let t = 0.25; t <= tB; t += 0.02) ts.push(t);
   let headBall = 1e9, torsoBall = 1e9, armBall = 1e9, legBall = 1e9, freeArmBall = 1e9, handTable = 1e9, freeTable = 1e9, elbowTable = 1e9, elbowF = 1e9, freeRk = 1e9, freeGrip = 1e9, rkHead = 1e9;
-  let hidden = 0, hiddenLate = 0, jumpE = 0, prev = null, pt = 0;
+  let hidden = 0, hiddenLate = 0, jumpE = 0, jumpAt = '', prev = null, pt = 0;
   for (const t of ts) {
     const J = sv.body.at(t);
     for (const k of Object.keys(J)) { const v = J[k]; if (Array.isArray(v) && v.some((x) => !Number.isFinite(x))) add('BAD NaN joint ' + k); }
@@ -64,7 +64,7 @@ for (let i = 0; i < N; i++) {
       freeGrip = Math.min(freeGrip, len(sub(handF, handP)) - 0.08);
       const rh = sub(J.head, J.racket.c), hn = dot(rh, J.racket.Z), hr = len(sub(rh, addmul([0, 0, 0], J.racket.Z, hn)));
       if (hr < 0.076) rkHead = Math.min(rkHead, Math.abs(hn) - 0.105); }
-    if (prev && t - pt < 0.0061) jumpE = Math.max(jumpE, len(sub(J.elF, prev.elF)) / (t - pt), len(sub(J.elP, prev.elP)) / (t - pt), len(sub(J.wrF, prev.wrF)) / (t - pt), len(sub(J.head, prev.head)) / (t - pt) * 3);
+    if (prev && t - pt < 0.0061) for (const [k, w] of [['elF', 1], ['elP', 1], ['wrF', 1], ['head', 3]]) { const v = len(sub(J[k], prev[k])) / (t - pt) * w; if (v > jumpE) { jumpE = v; jumpAt = `${k}@${t.toFixed(3)}`; } }
     prev = J; pt = t;
   }
   const chk = (name, v, lim) => { if (v < lim) { add('clip ' + name); track(name, -v, tag); } };
@@ -73,7 +73,7 @@ for (let i = 0; i < N; i++) {
   chk('freehand-blade', freeRk, -0.036); chk('freehand-grip', freeGrip, -0.04); chk('racket-head', rkHead, -0.031);
   if (hiddenLate > 0) { add('clip ball-hidden-at-contact'); track('ball-hidden-at-contact', hiddenLate, tag); }
   if (hidden > 0.06) { add('clip ball-hidden-in-toss'); track('ball-hidden-in-toss', hidden, tag); }
-  if (jumpE > 16) { add('BAD joint jump'); track('joint-jump m/s', jumpE, tag); }
+  if (jumpE > 16) { add('BAD joint jump'); track('joint-jump m/s', jumpE, tag + ' ' + jumpAt + ` tRel ${sv.tRel.toFixed(2)} swing ${sv.tSwing0.toFixed(2)}..${sv.tSwingEnd.toFixed(2)}`); }
   track('fastest elbow / free hand (m/s)', jumpE, tag);
   track('attempts', sv.attempts, tag);
 }

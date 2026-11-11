@@ -348,7 +348,7 @@ function start(hot) {
   function recvAim(sv) {
     if (!sv) return 0;
     const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
-    const wide = w > 1020, free = (w - (wide ? 296 + 310 : 0)) / 2 - 120; // 没被挡住的半宽，留出一个人的余量
+    const wide = w > 1020, free = (w - (wide ? 296 + 310 : 0)) / 2 - (wide ? 120 : 145); // 没被挡住的半宽，留出一个人的余量
     const f = h / 2 / Math.tan((camera.fov * DEG) / 2);
     const xs = (sv.pc[0] + (sv.pel0 ? sv.pel0[0] : sv.pc[0])) / 2;
     const off = (Math.abs(xs) / 4.5) * f;
@@ -419,6 +419,8 @@ function start(hot) {
     renderer.setSize(w, h, false);
     camera.aspect = w / h; camera.fov = clamp((36 * 1.55) / camera.aspect, 36, 50);
     inset();
+    // 窗口变窄 / 转屏之后，接球视角要重新对一下发球的人
+    if (S.view === 'recv' && S.serve && !camAnim && Math.abs(recvAim(S.serve) - recvAx) > 0.03) setView('recv', true);
   }
   window.addEventListener('resize', resize);
   if (window.ResizeObserver) new ResizeObserver(resize).observe($('#app'));
@@ -964,7 +966,7 @@ function start(hot) {
   $('#spinMore').open = m0 === 'lab';
   if (m0 === 'lab') { seedLab(); syncLabSliders(); rebuildLab(); setView('side', true); } else { nextServe(); setView('recv', true); }
   syncUI(); renderStage();
-  window.__pp = { S, setView, nextServe, playServe, answer, jump, setMode, showContact, showSpin, camera, controls,
+  window.__pp = { S, setView, nextServe, playServe, answer, jump, setMode, showContact, showSpin, camera, controls, ballVisible: () => ballPivot.visible,
     cam: (p, t) => { camAnim = null; camera.position.set(p[0], p[1], p[2]); controls.target.set(t[0], t[1], t[2]); },
     force: (cfg) => { const sv = generateServe(cfg); if (!sv) return null; sv.cfg = cfg; adopt(sv); S.dirty = false; S.phase = 'ready'; S.answer = null; S.t = sv.tStart; S.playing = false; S.auto = null; S.spinView = false; syncUI(); renderStage(); return sv.cls; } };
   requestAnimationFrame(frame);

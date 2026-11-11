@@ -1028,8 +1028,8 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
     }
   };
   var REST = {
-    wing: { rel: "sh", at: [-0.46, -0.1, -0.14] },
-    // 往身后甩开，手臂差不多伸直，和肩一样高（弯着腰时很自然，像滑冰的摆臂）
+    wing: { rel: "sh", at: [-0.41, -0.15, -0.16] },
+    // 往身后甩开，手臂略弯，比肩低一点（弯着腰时很自然，像滑冰的摆臂）
     back: { rel: "sh", at: [-0.4, -0.25, -0.09] },
     // 往身后收，低一些
     hip: { rel: "pel", at: [-0.02, 0.03, -0.27] },
@@ -1224,11 +1224,24 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
     if (Math.abs(p[0]) - P.tableW / 2 - r >= 0 || -P.tableL / 2 - r - p[2] >= 0) return 0;
     return below;
   }
+  function slerp(a, b, t) {
+    const c = clamp2(dot(a, b), -1, 1);
+    if (c > 0.99999) return a;
+    if (c < -0.9995) {
+      let ax = cross(a, [0, -1, 0]);
+      if (len(ax) < 1e-3) ax = cross(a, [1, 0, 0]);
+      ax = norm(ax);
+      const m = cross(ax, a), an = Math.PI * t;
+      return [a[0] * Math.cos(an) + m[0] * Math.sin(an), a[1] * Math.cos(an) + m[1] * Math.sin(an), a[2] * Math.cos(an) + m[2] * Math.sin(an)];
+    }
+    const th = Math.acos(c), s0 = Math.sin((1 - t) * th), s1 = Math.sin(t * th), sn = Math.sin(th);
+    return [(a[0] * s0 + b[0] * s1) / sn, (a[1] * s0 + b[1] * s1) / sn, (a[2] * s0 + b[2] * s1) / sn];
+  }
   function tableLiftSoft(p, r) {
     const below = P.tableY - (p[1] - r);
     if (below <= 0) return 0;
-    const din = Math.min(P.tableW / 2 + r - Math.abs(p[0]), p[2] + P.tableL / 2 + r);
-    return din <= 0 ? 0 : below * smooth(din / 0.06);
+    const din = Math.min(P.tableW / 2 + r - Math.abs(p[0]), p[2] + P.tableL / 2 + r) + 0.04;
+    return din <= 0 ? 0 : below * smooth(din / 0.07);
   }
   function buildMotion(o) {
     const mv = MOVES[o.type], pl = o.pl, rng = o.rng;
@@ -1334,7 +1347,7 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
       }
       const cPref = c - cLim;
       if (c >= bound) return null;
-      c += 300 * lim2(q[1], [0.56, 0.93]) + 60 * sq(q[1] - py0);
+      c += 300 * lim2(q[1], [0.56, 0.93]) + 220 * sq(q[1] - py0);
       const ft2 = feetOf(A.P, A.F, A.R, mv.feet, stanceW), hp = hipsOf(A.P, A.R);
       const dL = len(sub(hp.HL, ft2.AL)), dR = len(sub(hp.HR, ft2.AR));
       c += 400 * (sq(Math.max(0, dL - LEG_MAX + 0.03)) + sq(Math.max(0, dR - LEG_MAX + 0.03)));
@@ -1354,7 +1367,7 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
         sp += sq(discPen(A.Bc, A.Zf, a, b, rr + 0.025)) + sq(spherePen(hnd, 0.045, a, b, rr + 0.02)) + sq(spherePen(fm, DIM.rFore, a, b, rr + 0.015));
       }
       sp += sq(spherePen(A.E, 0.046, A.P, A.M, DIM.rLo)) + sq(spherePen(A.E, 0.046, A.M, A.C, DIM.rHi - 0.02)) + sq(spherePen(A.E, 0.046, hd, hd, DIM.headR));
-      c += 500 * sp;
+      c += 1600 * sp;
       let cp = sq(Math.max(0, DIM.headR + P.R + 0.04 - distColumn(hd, pc[0], pc[2], colY1, colY2)));
       cp += 0.2 * sq(Math.max(0, 0.34 - len(sub(hd, pc)))) + 0.4 * sq(Math.max(0, pc[1] + 0.16 - hd[1]));
       for (const [pt, rr] of [[A.M, DIM.rLo], [lerp(A.M, A.C, 0.5), DIM.rHi], [A.C, DIM.rHi], [A.SL, 0.065]]) cp += sq(Math.max(0, rr + P.R + 0.025 - distColumn(pt, pc[0], pc[2], colY1, colY2)));
@@ -1413,7 +1426,7 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
       }
       c += 0.45 * rt.effort + 4 * sq(Math.max(0, rt.worst - 1.15));
       if (c >= bound) return null;
-      return { v: v.slice(), q, A, cost: c, rt, ft: ft2, effort: rt.effort, worst: rt.worst, parts: { lim: cLim, pref: cPref, leg: cLeg, table: 900 * tp, self: 500 * sp, col: 500 * cp, free: 500 * fr, see: 2500 * see, effort: 0.45 * rt.effort + 4 * sq(Math.max(0, rt.worst - 1.15)) } };
+      return { v: v.slice(), q, A, cost: c, rt, ft: ft2, effort: rt.effort, worst: rt.worst, parts: { lim: cLim, pref: cPref, leg: cLeg, table: 900 * tp, self: 1600 * sp, col: 500 * cp, free: 500 * fr, see: 2500 * see, effort: 0.45 * rt.effort + 4 * sq(Math.max(0, rt.worst - 1.15)) } };
     };
     let best = null;
     const starts = [];
@@ -1620,9 +1633,23 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
         QR[2] -= A2.F[2] * 0.015;
         legFix(QR);
       }
-      const A = fkCore(QR, g), o3 = H2W(A.F, A.R, pl.readyAt || mv.ready.at);
-      const tg = [palmLo[0] + o3[0], palmLo[1] + o3[1], palmLo[2] + o3[2]];
-      const rp = repair(reach(QR, g, tg, 5, { idx: ARM4 }), false, tg, 40, null, { arm: true });
+      const A = fkCore(QR, g), hx = A.SR[0] - palmLo[0], hz = A.SR[2] - palmLo[2], hl = Math.hypot(hx, hz) || 1, rd = pl.readyD || mv.ready.d || 0.19;
+      const tg = [palmLo[0] + hx / hl * rd, palmLo[1] + (mv.ready.up === void 0 ? 0.06 : mv.ready.up), palmLo[2] + hz / hl * rd];
+      {
+        const an = dirsToAngles(A, norm(H2W(A.F, A.R, [0.06, -0.95, 0.3])), norm(sub(tg, addmul(A.SR, norm(H2W(A.F, A.R, [0.06, -0.95, 0.3])), DIM.upper))));
+        QR[8] = an.sF;
+        QR[9] = an.sR;
+        QR[10] = clamp2(an.rot, LIM.rot[0], LIM.rot[1]);
+        QR[11] = clamp2(an.elb, 60 * DEG, 125 * DEG);
+      }
+      const fMid = lerp(A.SL, palmLo, 0.7);
+      const readyPen = (q) => {
+        const B = fkCore(q, g), hnd = addmul(B.W, B.dd, 0.05);
+        let p = 6 * sq(Math.max(0, B.E[1] - B.SR[1] + 0.13));
+        for (const pt of [palmLo, fMid]) p += sq(Math.max(0, 0.115 - distSeg(pt, B.E, B.W))) + sq(Math.max(0, 0.125 - len(sub(pt, hnd)))) + sq(discPen(B.Bc, B.Zf, pt, pt, 0.07));
+        return p;
+      };
+      const rp = repair(reach(QR, g, tg, 5, { idx: ARM4 }), 2, tg, 70, readyPen, { arm: true });
       for (let i = 0; i < NQ; i++) QR[i] = rp.q[i];
     }
     const LATE = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.85, 0.62, 0.5, 0.5];
@@ -1668,11 +1695,16 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
     QB[4] = clamp2(qC[4] - riseT, LIM.lean[0], LIM.lean[1]);
     clampQ(QB, g);
     legFix(QB);
+    const DT = new Array(NQ).fill(0);
     const preAt = (qb, t) => {
       const q = new Array(NQ);
       for (let i = 0; i < NQ; i++) {
         const t1 = T1[i];
-        q[i] = t <= tb0 ? QR[i] : t < -t1 ? QR[i] + (qb[i] - QR[i]) * smooth((t - tb0) / (-t1 - tb0)) : hermite1(qb[i], 0, qC[i], uC[i], t1, (t + t1) / t1);
+        if (t <= tb0) q[i] = QR[i];
+        else if (t < -t1) {
+          const u = (t - tb0) / (-t1 - tb0);
+          q[i] = QR[i] + (qb[i] - QR[i]) * smooth(u) + (DT[i] ? DT[i] * sq(4 * u * (1 - u)) : 0);
+        } else q[i] = hermite1(qb[i], 0, qC[i], uC[i], t1, (t + t1) / t1);
       }
       return legFix(clampQ(q, g));
     };
@@ -1735,29 +1767,71 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
       const rp = repair(legFix(q), 2, tg, 110, swingPen, { arm: true, map: atSwing0 });
       for (let i = 0; i < NQ; i++) QB[i] = rp.q[i];
     }
+    {
+      const tsD = [0.2, 0.35, 0.5, 0.65, 0.8].map((u) => tb0 + u * (-T1max - tb0));
+      const hard = () => {
+        let p = 0;
+        for (const t of tsD) p += posePen(preAt(QB, t), false, null).hard;
+        return p;
+      };
+      let cur = hard();
+      if (cur > 1e-7) {
+        const DD = [[8, 0.5], [9, 0.5], [10, 0.6], [11, 0.45]];
+        let obj = cur;
+        for (let it = 0; it < 80 && cur > 1e-7; it++) {
+          const save2 = DT.slice(), sc = it < 40 ? 1 : 0.4, m = 1 + Math.floor(rng() * 2);
+          for (let k = 0; k < m; k++) {
+            const [i, r] = DD[Math.floor(rng() * DD.length)];
+            DT[i] += (rng() * 2 - 1) * r * sc;
+          }
+          const h2 = hard(), o2 = h2 + 2e-5 * (sq(DT[8]) + sq(DT[9]) + sq(DT[10]) + sq(DT[11]));
+          if (o2 < obj) {
+            obj = o2;
+            cur = h2;
+          } else for (let i = 0; i < NQ; i++) DT[i] = save2[i];
+        }
+      }
+    }
     let Tf = 0;
     const QFd = QF.slice(), T2d = T2.slice();
-    for (const scale of [1, 0.65, 0.4]) {
-      const D = Df * scale, Tm = clamp2(2 * D / Math.max(V, 0.8), 0.07, 0.3);
-      const tg = avoid([AC.Bc[0] + vd[0] * D, AC.Bc[1] + vd[1] * D, AC.Bc[2] + vd[2] * D], 0);
-      const seed2 = QFd.slice();
-      for (const i of [0, 1, 2, 4, 7, 8, 9, 10, 11]) seed2[i] = qC[i] + uC[i] * Tm * 0.5;
-      const rp = repair(legFix(reach(clampQ(seed2, g), g, tg, 7)), false, tg);
-      for (let i = 0; i < NQ; i++) {
-        QF[i] = rp.q[i];
-        T2[i] = Math.min(T2d[i], Tm * (0.6 + 0.4 * LATE[i]));
-      }
-      T2max = Tm;
-      let bad = rp.hard;
-      for (const f of [0.3, 0.6]) {
-        const q = new Array(NQ);
-        for (let i = 0; i < NQ; i++) {
-          const tt = f * Tm;
-          q[i] = tt < T2[i] ? hermite1(qC[i], uC[i], QF[i], 0, T2[i], tt / T2[i]) : QF[i];
-        }
+    const PROX = [0, 1, 2, 4, 7, 8, 9, 10, 11];
+    const pathBad = (qf, T2x, Tm, fs) => {
+      let bad = 0;
+      for (const f of fs) {
+        const q = new Array(NQ), tt = f * Tm;
+        for (let i = 0; i < NQ; i++) q[i] = tt < T2x[i] ? hermite1(qC[i], uC[i], qf[i], 0, T2x[i], tt / T2x[i]) : qf[i];
         bad += posePen(legFix(clampQ(q, g)), false, null).hard;
       }
-      if (bad < 2e-5) break;
+      return bad;
+    };
+    {
+      let ok = false;
+      for (const scale of [1, 0.7, 0.45, 0.28]) {
+        const Tm = clamp2(2 * Df * scale / Math.max(V, 0.8), 0.06, 0.3);
+        for (let i = 0; i < NQ; i++) {
+          QF[i] = QFd[i];
+          T2[i] = T2d[i];
+        }
+        for (const i of PROX) {
+          T2[i] = Tm * (0.6 + 0.4 * LATE[i]);
+          QF[i] = qC[i] + uC[i] * T2[i] * 0.5;
+        }
+        for (const i of [12, 13, 14]) if (T2d[i] > Tm) {
+          T2[i] = Tm;
+          const d = QFd[i] - qC[i];
+          QF[i] = qC[i] + Math.sign(d) * Math.min(Math.abs(d), 0.5 * Math.abs(uC[i]) * Tm);
+        }
+        legFix(clampQ(QF, g));
+        T2max = Tm;
+        if (pathBad(QF, T2, Tm, [0.25, 0.5, 0.75, 1]) < 2e-5) {
+          ok = true;
+          break;
+        }
+      }
+      if (!ok) {
+        const Tm = T2max, rp = repair(QF, false, null, 80, (q) => pathBad(q, T2, Tm, [0.3, 0.6, 0.85]), { arm: true });
+        for (let i = 0; i < NQ; i++) QF[i] = rp.q[i];
+      }
     }
     if (o.fake) {
       const amp = pl.fakeAmp || 1;
@@ -1767,18 +1841,17 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
         const room = clamp2(AC.Bc[1] - P.tableY - 0.13, 0, 0.14 * amp);
         D = [dh[0] * 0.15, -room, dh[2] * 0.15];
       } else {
-        const toC = norm(sub(lerp(AC.C, AC.M, 0.3), AC.Bc));
-        D = [toC[0] * 0.16, 0.05 + toC[1] * 0.1, toC[2] * 0.16];
+        const toC = norm(sub(lerp(AC.C, AC.M, 0.8), AC.Bc));
+        D = [toC[0] * 0.16, 0.03 + toC[1] * 0.1, toC[2] * 0.16];
       }
       Tf = clamp2(0.17 * (pl.fakeT || 1) * (0.85 + 0.15 * amp), 0.13, 0.26);
       const tg = avoid([AC.Bc[0] + D[0], AC.Bc[1] + D[1], AC.Bc[2] + D[2]], 0);
       if (o.fake === "chop") tg[1] = Math.max(tg[1], P.tableY + 0.11);
       const seed2 = qC.map((x, i) => x + uC[i] * Tf * 0.18);
-      const rp = repair(legFix(reach(clampQ(seed2, g), g, tg, 7)), false, tg);
-      for (let i = 0; i < NQ; i++) {
-        QF[i] = rp.q[i];
-        T2[i] = Tf;
-      }
+      for (let i = 0; i < NQ; i++) T2[i] = Tf;
+      let rp = repair(legFix(reach(clampQ(seed2, g), g, tg, 7, { idx: ARM4 })), false, tg, 70, null, { arm: true });
+      if (pathBad(rp.q, T2, Tf, [0.3, 0.6, 0.85]) > 2e-5) rp = repair(rp.q, false, tg, 70, (q) => pathBad(q, T2, Tf, [0.3, 0.6, 0.85]), { arm: true });
+      for (let i = 0; i < NQ; i++) QF[i] = rp.q[i];
       if (o.fake !== "tuck") QF[12] = clamp2(QF[12] + (o.fake === "lift" ? 1 : -1) * face * 22 * DEG, g.pro[0], g.pro[1]);
     }
     const QE = QF.slice();
@@ -1858,27 +1931,35 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
         const b = ballAt(t);
         Wf = wristOf([b[0], b[1] - P.R - 0.012, b[2]]);
       } else {
+        const S0 = A.SL;
+        const sph = (pA, pB, via, u3) => {
+          const ax = pA[0] - S0[0], ay = pA[1] - S0[1], az = pA[2] - S0[2], bx = pB[0] - S0[0], by = pB[1] - S0[1], bz = pB[2] - S0[2];
+          const rA = Math.hypot(ax, ay, az) || 1e-6, rB = Math.hypot(bx, by, bz) || 1e-6;
+          const dA = [ax / rA, ay / rA, az / rA], dB = [bx / rB, by / rB, bz / rB];
+          const dv = slerp(slerp(dA, via, u3), slerp(via, dB, u3), u3);
+          const lo = Math.min(rA, 0.27), r = Math.max(rA + (rB - rA) * u3, lo + (0.27 - lo) * smooth(u3 / 0.3));
+          return [S0[0] + dv[0] * r, S0[1] + dv[1] * r, S0[2] + dv[2] * r];
+        };
         const up = followUp * (1 - Math.exp(-tau / 0.09));
         const A0 = wristOf([palmHi[0], palmHi[1] + up, palmHi[2]]);
         const ue = smooth((t - te0) / De);
         const ro = H2W(F, R, plan2.rest.at), rb = plan2.rest.rel === "pel" ? A.P : A.SL, ge = H2W(F, R, [0.2, -0.33, -0.12]);
-        const r0 = [rb[0] + ro[0], rb[1] + ro[1], rb[2] + ro[2]], r1 = [A.SL[0] + ge[0], A.SL[1] + ge[1], A.SL[2] + ge[2]];
-        let rs = r0;
-        if (ue > 0) {
-          const lo = H2W(F, R, [-0.08, -0.6, -0.17]), cm = [A.SL[0] + lo[0], Math.min(A.SL[1] + lo[1], r0[1], r1[1]), A.SL[2] + lo[2]], w1 = 1 - ue;
-          rs = [w1 * w1 * r0[0] + 2 * ue * w1 * cm[0] + ue * ue * r1[0], w1 * w1 * r0[1] + 2 * ue * w1 * cm[1] + ue * ue * r1[1], w1 * w1 * r0[2] + 2 * ue * w1 * cm[2] + ue * ue * r1[2]];
+        let rs = [rb[0] + ro[0], rb[1] + ro[1], rb[2] + ro[2]];
+        if (ue > 0) rs = sph(rs, [A.SL[0] + ge[0], A.SL[1] + ge[1], A.SL[2] + ge[2]], norm(H2W(F, R, [-0.1, -0.95, -0.28])), ue);
+        const u = smooth((tau - freeDelay) / plan2.freeT);
+        if (u <= 0) Wf = A0;
+        else {
+          let via = plan2.via ? norm(H2W(F, R, plan2.via)) : null;
+          if (!via) {
+            const a = norm(sub(A0, S0)), b = norm(sub(rs, S0)), ob = H2W(F, R, [0.1, -0.5, -0.85]);
+            via = norm([a[0] + b[0] + ob[0], a[1] + b[1] + ob[1], a[2] + b[2] + ob[2]]);
+          }
+          Wf = sph(A0, rs, via, u);
         }
-        const u = smooth((tau - freeDelay) / freeT), w = 1 - u;
-        let ct = lerp(A0, rs, 0.5);
-        if (plan2.via) {
-          const vo = H2W(F, R, plan2.via);
-          ct = [2 * (A.SL[0] + vo[0]) - ct[0], 2 * (A.SL[1] + vo[1]) - ct[1], 2 * (A.SL[2] + vo[2]) - ct[2]];
-        }
-        Wf = [w * w * A0[0] + 2 * u * w * ct[0] + u * u * rs[0], w * w * A0[1] + 2 * u * w * ct[1] + u * u * rs[1], w * w * A0[2] + 2 * u * w * ct[2] + u * u * rs[2]];
         Wf[1] += tableLiftSoft(Wf, 0.055);
         relax = smooth(tau / 0.3);
       }
-      const u2 = tau <= 0 ? 0 : smooth((tau - freeDelay) / freeT);
+      const u2 = tau <= 0 ? 0 : smooth((tau - freeDelay) / plan2.freeT);
       let pole = poleOf(norm(sub(Wf, A.SL)), plan2.sw * (1 - u2) + plan2.swR * u2);
       if (useSmooth && eDir) {
         const x = clamp2((t - eT0) / eDt, 0, eDir.length - 1.001), k = Math.floor(x);
@@ -1926,7 +2007,7 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
       return { S: kf.S, E: kf.E, W: Wf, d, p, r: cross(p, d), relax, tau };
     };
     const SWIVEL = [[0, 0], [0.5, 0], [-0.45, 0], [0, 0.5], [0, -0.5], [0.5, 0.5]];
-    const VIAS = [null, [0.12, -0.16, -0.3], [-0.04, -0.06, -0.37], [0.06, 0.08, -0.34], [0.22, -0.26, -0.2]];
+    const VIAS = [null, [0.3, -0.5, -0.8], [-0.1, -0.15, -0.98], [0.15, 0.3, -0.94], [0.5, -0.8, -0.35]];
     const restOrder = (() => {
       const first = pl.rest && pl.rest[mv.stance] || (mv.stance === "side" ? "wing" : "low");
       return [first, ...Object.keys(REST).filter((k) => k !== first)];
@@ -1968,13 +2049,25 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
           const b = ballAt(t);
           for (const [pt, rr] of [[hf, 0.045], [ff, 0.04], [fa.E, 0.046], [lerp(fa.S, fa.E, 0.5), DIM.rUpper + 4e-3]]) pen += sq(Math.max(0, hideDepth(b, pt, rr) + P.R + 0.01));
         }
-        pen += sq(Math.max(0, 0.2 - len(sub(fa.W, fa.S))));
+        pen += 4 * sq(Math.max(0, 0.3 - len(sub(fa.W, fa.S))));
       }
       return pen;
     };
     let plan = null, planBest = 1e9;
     search: for (let ri = 0; ri < restOrder.length; ri++) for (let hi = 0; hi < SWIVEL.length; hi++) for (let ci = 0; ci < VIAS.length; ci++) {
       const pln = { rest: REST[restOrder[ri]], restKey: restOrder[ri], sw: SWIVEL[hi][0], swR: SWIVEL[hi][1], via: VIAS[ci] };
+      {
+        const ro = H2W(AC.F, AC.R, pln.rest.at), rb = pln.rest.rel === "pel" ? AC.P : AC.SL;
+        const vA = [palmHi[0] - AC.SL[0], palmHi[1] + followUp - AC.SL[1], palmHi[2] - AC.SL[2]], vB = [rb[0] + ro[0] - AC.SL[0], rb[1] + ro[1] - AC.SL[1], rb[2] + ro[2] - AC.SL[2]];
+        const rA = len(vA), rB = len(vB), dA = norm(vA), dB = norm(vB);
+        let via = pln.via ? norm(H2W(AC.F, AC.R, pln.via)) : null;
+        if (!via) {
+          const ob = H2W(AC.F, AC.R, [0.1, -0.5, -0.85]);
+          via = norm([dA[0] + dB[0] + ob[0], dA[1] + dB[1] + ob[1], dA[2] + dB[2] + ob[2]]);
+        }
+        const arc = 0.8 * (Math.acos(clamp2(dot(dA, via), -1, 1)) + Math.acos(clamp2(dot(via, dB), -1, 1))) * (rA + rB) / 2 + Math.abs(rA - rB);
+        pln.freeT = clamp2(Math.max(freeT, 1.5 * arc / 6), 0.2, 0.55);
+      }
       const pn = planPen(pln) + 2e-5 * ri + 1e-5 * ci + 1e-5 * hi;
       if (pn < planBest) {
         planBest = pn;
@@ -2079,6 +2172,12 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
     out.stats = validate(out, o);
     return out;
   }
+  function slabDist(p, a, b, right, hw, hd) {
+    const cp = closestOnSeg(p, a, b), vx = p[0] - cp[0], vy = p[1] - cp[1], vz = p[2] - cp[2];
+    const lat = vx * right[0] + vy * right[1] + vz * right[2];
+    const sag = Math.sqrt(Math.max(0, vx * vx + vy * vy + vz * vz - lat * lat));
+    return (Math.hypot(lat / hw, sag / hd) - 1) * hd;
+  }
   function validate(m, o) {
     const st = { body: 0, table: 0, ballBody: 0, early: 0, late: 0, free: 0, leg: 0, nan: 0, hide: -1, hideT: 0, where: {} };
     const up = (k, v, t, tag) => {
@@ -2100,14 +2199,15 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
       const J = m.at(t);
       for (const k of ["pelvis", "chest", "head", "elP", "wrP", "elF", "wrF", "knP", "knF"]) if (!J[k].every(Number.isFinite)) st.nan++;
       const rk = J.racket;
-      const caps = [["torso", J.pelvis, J.mid, DIM.rLo], ["chest", J.mid, J.chest, DIM.rHi], ["head", J.head, J.head, DIM.headR], ["thighP", J.hipP, J.knP, DIM.rThigh], ["thighF", J.hipF, J.knF, DIM.rThigh], ["shinP", J.knP, J.anP, DIM.rShin], ["shinF", J.knF, J.anF, DIM.rShin]];
+      const Rm = norm(lerp(J.R, J.Rc, 0.45)), TW = [0.15, 0.108], CW = [0.172, 0.114];
+      const caps = [["torso", J.pelvis, J.mid, TW[1] + 8e-3, Rm, TW], ["chest", J.mid, J.chest, CW[1] + 8e-3, J.Rc, CW], ["head", J.head, J.head, DIM.headR], ["thighP", J.hipP, J.knP, DIM.rThigh], ["thighF", J.hipF, J.knF, DIM.rThigh], ["shinP", J.knP, J.anP, DIM.rShin], ["shinF", J.knF, J.anF, DIM.rShin]];
       const hnd = addmul(J.wrP, J.handP.d, 0.05), fm = lerp(J.elP, J.wrP, 0.55);
-      for (const [nm, a, b2, rr] of caps) {
+      for (const [nm, a, b2, rr, rt, wd] of caps) {
         up("body", discPen(rk.c, rk.Z, a, b2, rr), t, "racket-" + nm);
-        up("body", spherePen(hnd, 0.042, a, b2, rr), t, "hand-" + nm);
-        up("body", spherePen(fm, DIM.rFore, a, b2, rr), t, "forearm-" + nm);
+        up("body", rt ? 0.042 - slabDist(hnd, a, b2, rt, wd[0], wd[1]) : spherePen(hnd, 0.042, a, b2, rr), t, "hand-" + nm);
+        up("body", rt ? DIM.rFore - slabDist(fm, a, b2, rt, wd[0], wd[1]) : spherePen(fm, DIM.rFore, a, b2, rr), t, "forearm-" + nm);
       }
-      up("body", spherePen(J.elP, 0.044, J.pelvis, J.mid, DIM.rLo), t, "elbow-torso");
+      up("body", 0.044 - slabDist(J.elP, J.pelvis, J.mid, Rm, TW[0], TW[1]), t, "elbow-torso");
       up("body", spherePen(J.elP, 0.044, J.head, J.head, DIM.headR), t, "elbow-head");
       {
         const nz = rk.Z, drop = DIM.blade * Math.sqrt(Math.max(0, 1 - nz[1] * nz[1]));
@@ -2130,11 +2230,11 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
           up("free", rr + 0.04 - len(sub(pt, hnd)), t, nm + "-hand");
         }
         if (t > o.tRel + 0.05) {
-          up("free", DIM.rLo + 0.035 - distSeg(hf, J.pelvis, J.mid), t, "hand-torso");
-          up("free", DIM.rHi + 0.03 - distSeg(hf, J.mid, J.chest), t, "hand-chest");
+          up("free", 0.04 - slabDist(hf, J.pelvis, J.mid, Rm, TW[0], TW[1]), t, "hand-torso");
+          up("free", 0.04 - slabDist(hf, J.mid, J.chest, J.Rc, CW[0], CW[1]), t, "hand-chest");
           up("free", DIM.headR + 0.04 - len(sub(hf, J.head)), t, "hand-head");
         }
-        up("free", DIM.rLo + 0.03 - distSeg(J.elF, J.pelvis, J.mid), t, "elbow-torso");
+        up("free", 0.042 - slabDist(J.elF, J.pelvis, J.mid, Rm, TW[0], TW[1]), t, "elbow-torso");
       }
       up("leg", Math.max(len(sub(J.hipP, J.anP)), len(sub(J.hipF, J.anF))) - (DIM.thigh + DIM.shin), t, "leg");
       const b = o.ballAt(t).p;
@@ -3502,7 +3602,7 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
     function recvAim(sv) {
       if (!sv) return 0;
       const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
-      const wide = w > 1020, free = (w - (wide ? 296 + 310 : 0)) / 2 - 120;
+      const wide = w > 1020, free = (w - (wide ? 296 + 310 : 0)) / 2 - (wide ? 120 : 145);
       const f = h / 2 / Math.tan(camera.fov * DEG3 / 2);
       const xs = (sv.pc[0] + (sv.pel0 ? sv.pel0[0] : sv.pc[0])) / 2;
       const off = Math.abs(xs) / 4.5 * f;
@@ -3592,6 +3692,7 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
       camera.aspect = w / h;
       camera.fov = clamp3(36 * 1.55 / camera.aspect, 36, 50);
       inset();
+      if (S.view === "recv" && S.serve && !camAnim && Math.abs(recvAim(S.serve) - recvAx) > 0.03) setView("recv", true);
     }
     window.addEventListener("resize", resize);
     if (window.ResizeObserver) new ResizeObserver(resize).observe($("#app"));
@@ -4425,6 +4526,7 @@ ol.steps li i{font-style:normal;color:var(--mute);font-size:12px;display:block;m
       showSpin,
       camera,
       controls,
+      ballVisible: () => ballPivot.visible,
       cam: (p, t) => {
         camAnim = null;
         camera.position.set(p[0], p[1], p[2]);

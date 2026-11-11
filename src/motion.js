@@ -80,7 +80,7 @@ export const MOVES = {
 
 // 抛完球那只手去哪儿（身体坐标 [前, 上, 右]；rel = 相对同侧肩膀 sh 还是骨盆 pel）
 const REST = {
-  wing: { rel: 'sh', at: [-0.46, -0.10, -0.14] },   // 往身后甩开，手臂差不多伸直，和肩一样高（弯着腰时很自然，像滑冰的摆臂）
+  wing: { rel: 'sh', at: [-0.41, -0.15, -0.16] },   // 往身后甩开，手臂略弯，比肩低一点（弯着腰时很自然，像滑冰的摆臂）
   back: { rel: 'sh', at: [-0.40, -0.25, -0.09] },   // 往身后收，低一些
   hip: { rel: 'pel', at: [-0.02, 0.03, -0.27] },    // 收到胯边
   tuck: { rel: 'pel', at: [0.17, 0.12, -0.10] },    // 收到小腹前
@@ -241,6 +241,18 @@ function tableLift(p, r) {
   return below;
 }
 
+// 两个单位向量之间沿球面插值
+function slerp(a, b, t) {
+  const c = clamp(dot(a, b), -1, 1);
+  if (c > 0.99999) return a;
+  if (c < -0.9995) { // 正好相反：随便挑一个垂直的方向绕过去（朝下优先）
+    let ax = cross(a, [0, -1, 0]); if (len(ax) < 1e-3) ax = cross(a, [1, 0, 0]); ax = norm(ax);
+    const m = cross(ax, a), an = Math.PI * t; return [a[0] * Math.cos(an) + m[0] * Math.sin(an), a[1] * Math.cos(an) + m[1] * Math.sin(an), a[2] * Math.cos(an) + m[2] * Math.sin(an)];
+  }
+  const th = Math.acos(c), s0 = Math.sin((1 - t) * th), s1 = Math.sin(t * th), sn = Math.sin(th);
+  return [(a[0] * s0 + b[0] * s1) / sn, (a[1] * s0 + b[1] * s1) / sn, (a[2] * s0 + b[2] * s1) / sn];
+}
+
 // 同上，但在台边是渐变的（给逐帧动的东西用：手从台外挪到台面上方时不会突然跳一下）
 function tableLiftSoft(p, r) {
   const below = P.tableY - (p[1] - r);
@@ -373,7 +385,7 @@ export function buildMotion(o) {
       sp += sq(discPen(A.Bc, A.Zf, a, b, rr + 0.025)) + sq(spherePen(hnd, 0.045, a, b, rr + 0.02)) + sq(spherePen(fm, DIM.rFore, a, b, rr + 0.015));
     }
     sp += sq(spherePen(A.E, 0.046, A.P, A.M, DIM.rLo)) + sq(spherePen(A.E, 0.046, A.M, A.C, DIM.rHi - 0.02)) + sq(spherePen(A.E, 0.046, hd, hd, DIM.headR));
-    c += 500 * sp;
+    c += 1600 * sp;
     // 抛起来的球走一条竖线：头、身体、肩、上臂得让开（头和胸口还要给托球的手留出位置）
     let cp = sq(Math.max(0, DIM.headR + P.R + 0.04 - distColumn(hd, pc[0], pc[2], colY1, colY2)));
     cp += 0.2 * sq(Math.max(0, 0.34 - len(sub(hd, pc)))) + 0.4 * sq(Math.max(0, pc[1] + 0.16 - hd[1])); // 触球点别贴在脸跟前：眼睛离球总得有一尺来远，而且是从上面往下看球
@@ -428,7 +440,7 @@ export function buildMotion(o) {
       if (Math.max(dL, dR) > LEG_MAX - 0.006) return null; }
     c += 0.45 * rt.effort + 4 * sq(Math.max(0, rt.worst - 1.15));
     if (c >= bound) return null;
-    return { v: v.slice(), q, A, cost: c, rt, ft, effort: rt.effort, worst: rt.worst, parts: { lim: cLim, pref: cPref, leg: cLeg, table: 900 * tp, self: 500 * sp, col: 500 * cp, free: 500 * fr, see: 2500 * see, effort: 0.45 * rt.effort + 4 * sq(Math.max(0, rt.worst - 1.15)) } };
+    return { v: v.slice(), q, A, cost: c, rt, ft, effort: rt.effort, worst: rt.worst, parts: { lim: cLim, pref: cPref, leg: cLeg, table: 900 * tp, self: 1600 * sp, col: 500 * cp, free: 500 * fr, see: 2500 * see, effort: 0.45 * rt.effort + 4 * sq(Math.max(0, rt.worst - 1.15)) } };
   };
 
   let best = null;
@@ -580,9 +592,21 @@ export function buildMotion(o) {
       QR[4] = Math.max(LIM.lean[0], QR[4] - 4 * DEG); QR[0] -= A.F[0] * 0.015; QR[2] -= A.F[2] * 0.015;
       legFix(QR);
     }
-    const A = fkCore(QR, g), o3 = H2W(A.F, A.R, pl.readyAt || mv.ready.at);
-    const tg = [palmLo[0] + o3[0], palmLo[1] + o3[1], palmLo[2] + o3[2]];
-    const rp = repair(reach(QR, g, tg, 5, { idx: ARM4 }), false, tg, 40, null, { arm: true });
+    // 拍子收在托球手旁边、靠持拍这一侧肩膀的方向：两条小臂从两边肩膀伸过来，在手这儿碰头，不会交叉
+    const A = fkCore(QR, g), hx = A.SR[0] - palmLo[0], hz = A.SR[2] - palmLo[2], hl = Math.hypot(hx, hz) || 1, rd = pl.readyD || mv.ready.d || 0.19;
+    const tg = [palmLo[0] + hx / hl * rd, palmLo[1] + (mv.ready.up === undefined ? 0.06 : mv.ready.up), palmLo[2] + hz / hl * rd];
+    // 准备时手臂是垂着的：大臂挂在肩膀下面，小臂往前伸，把拍子递到托球的手旁边。肘不该架到肩膀那么高
+    { const an = dirsToAngles(A, norm(H2W(A.F, A.R, [0.06, -0.95, 0.3])), norm(sub(tg, addmul(A.SR, norm(H2W(A.F, A.R, [0.06, -0.95, 0.3])), DIM.upper))));
+      QR[8] = an.sF; QR[9] = an.sR; QR[10] = clamp(an.rot, LIM.rot[0], LIM.rot[1]); QR[11] = clamp(an.elb, 60 * DEG, 125 * DEG); }
+    // 肘别架高；拍子、持拍的手和小臂离托球的手、托球那条小臂远一点（两只手是并排的，不是叠在一起的）
+    const fMid = lerp(A.SL, palmLo, 0.7);
+    const readyPen = (q) => {
+      const B = fkCore(q, g), hnd = addmul(B.W, B.dd, 0.05);
+      let p = 6 * sq(Math.max(0, B.E[1] - B.SR[1] + 0.13));
+      for (const pt of [palmLo, fMid]) p += sq(Math.max(0, 0.115 - distSeg(pt, B.E, B.W))) + sq(Math.max(0, 0.125 - len(sub(pt, hnd)))) + sq(discPen(B.Bc, B.Zf, pt, pt, 0.07));
+      return p;
+    };
+    const rp = repair(reach(QR, g, tg, 5, { idx: ARM4 }), 2, tg, 70, readyPen, { arm: true });
     for (let i = 0; i < NQ; i++) QR[i] = rp.q[i]; }
   // 引拍：球拍引到"挥拍方向的反面、再高一些"，距离 Db
   // 远端关节起动得晚：躯干和肩先动，然后肘，最后前臂旋转和手腕
@@ -625,11 +649,16 @@ export function buildMotion(o) {
   clampQ(QB, g); legFix(QB);
   // 手臂引到头、开始往前挥的那一刻（-T1max），上身已经从最直的样子往下压了一截。那一刻整个人的姿势：
   // 触球之前任意时刻的姿势（假如引拍到头的姿势是 qb）：准备 → 引拍 → 往前挥。各关节起动的时刻不一样（T1[i]）
+  // DT：从准备姿势到引拍到头，各关节默认是直着转过去的；要是那样半路上手肘会穿过身体，就让手臂绕一下——
+  // DT[i] 是半路上多转的量，两头都是零，所以起点和终点不变、过渡是平滑的
+  const DT = new Array(NQ).fill(0);
   const preAt = (qb, t) => {
     const q = new Array(NQ);
     for (let i = 0; i < NQ; i++) {
       const t1 = T1[i];
-      q[i] = t <= tb0 ? QR[i] : t < -t1 ? QR[i] + (qb[i] - QR[i]) * smooth((t - tb0) / (-t1 - tb0)) : hermite1(qb[i], 0, qC[i], uC[i], t1, (t + t1) / t1);
+      if (t <= tb0) q[i] = QR[i];
+      else if (t < -t1) { const u = (t - tb0) / (-t1 - tb0); q[i] = QR[i] + (qb[i] - QR[i]) * smooth(u) + (DT[i] ? DT[i] * sq(4 * u * (1 - u)) : 0); }
+      else q[i] = hermite1(qb[i], 0, qC[i], uC[i], t1, (t + t1) / t1);
     }
     return legFix(clampQ(q, g));
   };
@@ -682,34 +711,64 @@ export function buildMotion(o) {
     const rp = repair(legFix(q), 2, tg, 110, swingPen, { arm: true, map: atSwing0 });
     for (let i = 0; i < NQ; i++) QB[i] = rp.q[i];
   }
-  // 顺势收拍：到位和中途都不能打架，不行就收短一点
+  { // 准备 → 引拍的半路上要是手臂会和身体打架，就给它找一条绕开的路（见 DT）
+    const tsD = [0.2, 0.35, 0.5, 0.65, 0.8].map((u) => tb0 + u * (-T1max - tb0));
+    const hard = () => { let p = 0; for (const t of tsD) p += posePen(preAt(QB, t), false, null).hard; return p; };
+    let cur = hard();
+    if (cur > 1e-7) {
+      const DD = [[8, 0.5], [9, 0.5], [10, 0.6], [11, 0.45]];
+      let obj = cur;
+      for (let it = 0; it < 80 && cur > 1e-7; it++) {
+        const save = DT.slice(), sc = it < 40 ? 1 : 0.4, m = 1 + Math.floor(rng() * 2);
+        for (let k = 0; k < m; k++) { const [i, r] = DD[Math.floor(rng() * DD.length)]; DT[i] += (rng() * 2 - 1) * r * sc; }
+        const h2 = hard(), o2 = h2 + 2e-5 * (sq(DT[8]) + sq(DT[9]) + sq(DT[10]) + sq(DT[11]));
+        if (o2 < obj) { obj = o2; cur = h2; } else for (let i = 0; i < NQ; i++) DT[i] = save[i];
+      }
+    } }
+  // 顺势收拍：触球之后每个关节顺着自己正在转的方向匀减速停下来——球拍走的是绕着肘和肩的弧线，不是直线
+  // （钟摆发球拍子是朝自己肚子挥的：手臂是贴着身体前面裹过去的，不是直着捅过去）。
+  // 一路上和到位时都不能和身体、球台打架；会打架就收短一点，再不行就调整停下来的姿势
   let Tf = 0;
   const QFd = QF.slice(), T2d = T2.slice(); // 手腕和前臂旋转的收拍（上面算好的）
-  for (const scale of [1, 0.65, 0.4]) {
-    const D = Df * scale, Tm = clamp(2 * D / Math.max(V, 0.8), 0.07, 0.3);
-    const tg = avoid([AC.Bc[0] + vd[0] * D, AC.Bc[1] + vd[1] * D, AC.Bc[2] + vd[2] * D], 0);
-    const seed = QFd.slice(); for (const i of [0, 1, 2, 4, 7, 8, 9, 10, 11]) seed[i] = qC[i] + uC[i] * Tm * 0.5;
-    const rp = repair(legFix(reach(clampQ(seed, g), g, tg, 7)), false, tg);
-    for (let i = 0; i < NQ; i++) { QF[i] = rp.q[i]; T2[i] = Math.min(T2d[i], Tm * (0.6 + 0.4 * LATE[i])); }
-    T2max = Tm;
-    // 中途两个时刻
-    let bad = rp.hard;
-    for (const f of [0.3, 0.6]) { const q = new Array(NQ); for (let i = 0; i < NQ; i++) { const tt = f * Tm; q[i] = tt < T2[i] ? hermite1(qC[i], uC[i], QF[i], 0, T2[i], tt / T2[i]) : QF[i]; } bad += posePen(legFix(clampQ(q, g)), false, null).hard; }
-    if (bad < 2e-5) break;
-  }
+  const PROX = [0, 1, 2, 4, 7, 8, 9, 10, 11];
+  const pathBad = (qf, T2x, Tm, fs) => {
+    let bad = 0;
+    for (const f of fs) {
+      const q = new Array(NQ), tt = f * Tm;
+      for (let i = 0; i < NQ; i++) q[i] = tt < T2x[i] ? hermite1(qC[i], uC[i], qf[i], 0, T2x[i], tt / T2x[i]) : qf[i];
+      bad += posePen(legFix(clampQ(q, g)), false, null).hard;
+    }
+    return bad;
+  };
+  { let ok = false;
+    for (const scale of [1, 0.7, 0.45, 0.28]) {
+      const Tm = clamp(2 * Df * scale / Math.max(V, 0.8), 0.06, 0.3);
+      for (let i = 0; i < NQ; i++) { QF[i] = QFd[i]; T2[i] = T2d[i]; }
+      for (const i of PROX) { T2[i] = Tm * (0.6 + 0.4 * LATE[i]); QF[i] = qC[i] + uC[i] * T2[i] * 0.5; }
+      for (const i of [12, 13, 14]) if (T2d[i] > Tm) { T2[i] = Tm; const d = QFd[i] - qC[i]; QF[i] = qC[i] + Math.sign(d) * Math.min(Math.abs(d), 0.5 * Math.abs(uC[i]) * Tm); }
+      legFix(clampQ(QF, g));
+      T2max = Tm;
+      if (pathBad(QF, T2, Tm, [0.25, 0.5, 0.75, 1]) < 2e-5) { ok = true; break; }
+    }
+    if (!ok) { // 最短的收拍还是会碰到：调整停下来的姿势，让整条路让开
+      const Tm = T2max, rp = repair(QF, false, null, 80, (q) => pathBad(q, T2, Tm, [0.3, 0.6, 0.85]), { arm: true }); // 只动手臂：上身在这么短的时间里改不了多少
+      for (let i = 0; i < NQ; i++) QF[i] = rp.q[i];
+    } }
   // 假动作：触球后球拍不顺着走，而是拐去别的方向
   if (o.fake) {
     const amp = pl.fakeAmp || 1;
     let D;
     if (o.fake === 'lift') D = [dh[0] * 0.10, 0.24 * amp, dh[2] * 0.10];
     else if (o.fake === 'chop') { const room = clamp(AC.Bc[1] - P.tableY - 0.13, 0, 0.14 * amp); D = [dh[0] * 0.15, -room, dh[2] * 0.15]; }
-    else { const toC = norm(sub(lerp(AC.C, AC.M, 0.3), AC.Bc)); D = [toC[0] * 0.16, 0.05 + toC[1] * 0.1, toC[2] * 0.16]; }
+    else { const toC = norm(sub(lerp(AC.C, AC.M, 0.8), AC.Bc)); D = [toC[0] * 0.16, 0.03 + toC[1] * 0.1, toC[2] * 0.16]; } // 往肚子前面收，不是往脸上收
     Tf = clamp(0.17 * (pl.fakeT || 1) * (0.85 + 0.15 * amp), 0.13, 0.26);
     const tg = avoid([AC.Bc[0] + D[0], AC.Bc[1] + D[1], AC.Bc[2] + D[2]], 0);
     if (o.fake === 'chop') tg[1] = Math.max(tg[1], P.tableY + 0.11);
     const seed = qC.map((x, i) => x + uC[i] * Tf * 0.18);
-    const rp = repair(legFix(reach(clampQ(seed, g), g, tg, 7)), false, tg);
-    for (let i = 0; i < NQ; i++) { QF[i] = rp.q[i]; T2[i] = Tf; }
+    for (let i = 0; i < NQ; i++) T2[i] = Tf;
+    let rp = repair(legFix(reach(clampQ(seed, g), g, tg, 7, { idx: ARM4 })), false, tg, 70, null, { arm: true });
+    if (pathBad(rp.q, T2, Tf, [0.3, 0.6, 0.85]) > 2e-5) rp = repair(rp.q, false, tg, 70, (q) => pathBad(q, T2, Tf, [0.3, 0.6, 0.85]), { arm: true }); // 拐过去的路上别蹭到身体
+    for (let i = 0; i < NQ; i++) QF[i] = rp.q[i];
     // 假动作顺带把拍面翻一下：假装上提时合一点，假装下切时亮一点
     if (o.fake !== 'tuck') QF[12] = clamp(QF[12] + (o.fake === 'lift' ? 1 : -1) * face * 22 * DEG, g.pro[0], g.pro[1]);
   }
@@ -769,25 +828,36 @@ export function buildMotion(o) {
     let Wf, relax = 0, d = dirH, p = [0, 1, 0];
     if (tau <= 0) { const b = ballAt(t); Wf = wristOf([b[0], b[1] - P.R - 0.012, b[2]]); }
     else {
+      // 以肩为中心：手往哪个方向伸、伸多远分开算（方向从 pA 的方向经过 via 转到 pB 的方向，远近匀着变）。
+      // 这样手是绕着肩膀挥过去的，不会从肩膀跟前擦过去——那样手臂得缩成一团，肘也会乱甩
+      const S0 = A.SL;
+      const sph = (pA, pB, via, u) => {
+        const ax = pA[0] - S0[0], ay = pA[1] - S0[1], az = pA[2] - S0[2], bx = pB[0] - S0[0], by = pB[1] - S0[1], bz = pB[2] - S0[2];
+        const rA = Math.hypot(ax, ay, az) || 1e-6, rB = Math.hypot(bx, by, bz) || 1e-6;
+        // 方向：在球面上从 A 的方向朝着 via 拐向 B 的方向（球面上的二次贝塞尔：两两球面插值再插一次），转得匀、不会突然掉头
+        const dA = [ax / rA, ay / rA, az / rA], dB = [bx / rB, by / rB, bz / rB];
+        const dv = slerp(slerp(dA, via, u), slerp(via, dB, u), u);
+        const lo = Math.min(rA, 0.27), r = Math.max(rA + (rB - rA) * u, lo + (0.27 - lo) * smooth(u / 0.3));
+        return [S0[0] + dv[0] * r, S0[1] + dv[1] * r, S0[2] + dv[2] * r];
+      };
       const up = followUp * (1 - Math.exp(-tau / 0.09));
       const A0 = wristOf([palmHi[0], palmHi[1] + up, palmHi[2]]);
       const ue = smooth((t - te0) / De); // 收势：这只手也回到身前
       const ro = H2W(F, R, plan.rest.at), rb = plan.rest.rel === 'pel' ? A.P : A.SL, ge = H2W(F, R, [0.20, -0.33, -0.12]);
-      const r0 = [rb[0] + ro[0], rb[1] + ro[1], rb[2] + ro[2]], r1 = [A.SL[0] + ge[0], A.SL[1] + ge[1], A.SL[2] + ge[2]];
-      let rs = r0;
-      if (ue > 0) { // 从身后回到身前：手是垂着荡过去的（从腋下直穿过去就成了缩着胳膊）
-        const lo = H2W(F, R, [-0.08, -0.6, -0.17]), cm = [A.SL[0] + lo[0], Math.min(A.SL[1] + lo[1], r0[1], r1[1]), A.SL[2] + lo[2]], w1 = 1 - ue;
-        rs = [w1 * w1 * r0[0] + 2 * ue * w1 * cm[0] + ue * ue * r1[0], w1 * w1 * r0[1] + 2 * ue * w1 * cm[1] + ue * ue * r1[1], w1 * w1 * r0[2] + 2 * ue * w1 * cm[2] + ue * ue * r1[2]];
+      let rs = [rb[0] + ro[0], rb[1] + ro[1], rb[2] + ro[2]];
+      if (ue > 0) rs = sph(rs, [A.SL[0] + ge[0], A.SL[1] + ge[1], A.SL[2] + ge[2]], norm(H2W(F, R, [-0.1, -0.95, -0.28])), ue); // 从身后回到身前：手是垂着荡过去的
+      const u = smooth((tau - freeDelay) / plan.freeT);
+      if (u <= 0) Wf = A0;
+      else {
+        // 收手的路：默认从外侧偏低的地方绕过去；plan.via 可以换成别的绕法
+        let via = plan.via ? norm(H2W(F, R, plan.via)) : null;
+        if (!via) { const a = norm(sub(A0, S0)), b = norm(sub(rs, S0)), ob = H2W(F, R, [0.1, -0.5, -0.85]); via = norm([a[0] + b[0] + ob[0], a[1] + b[1] + ob[1], a[2] + b[2] + ob[2]]); }
+        Wf = sph(A0, rs, via, u);
       }
-      const u = smooth((tau - freeDelay) / freeT), w = 1 - u;
-      // 收手的路：直接过去，或者先从身体外侧绕一下（via = 途中经过的点，相对这一侧的肩膀）
-      let ct = lerp(A0, rs, 0.5);
-      if (plan.via) { const vo = H2W(F, R, plan.via); ct = [2 * (A.SL[0] + vo[0]) - ct[0], 2 * (A.SL[1] + vo[1]) - ct[1], 2 * (A.SL[2] + vo[2]) - ct[2]]; }
-      Wf = [w * w * A0[0] + 2 * u * w * ct[0] + u * u * rs[0], w * w * A0[1] + 2 * u * w * ct[1] + u * u * rs[1], w * w * A0[2] + 2 * u * w * ct[2] + u * u * rs[2]];
       Wf[1] += tableLiftSoft(Wf, 0.055);
       relax = smooth(tau / 0.3);
     }
-    const u2 = tau <= 0 ? 0 : smooth((tau - freeDelay) / freeT);
+    const u2 = tau <= 0 ? 0 : smooth((tau - freeDelay) / plan.freeT);
     let pole = poleOf(norm(sub(Wf, A.SL)), plan.sw * (1 - u2) + plan.swR * u2);
     if (useSmooth && eDir) { const x = clamp((t - eT0) / eDt, 0, eDir.length - 1.001), k = Math.floor(x); pole = lerp(eDir[k], eDir[k + 1], x - k); }
     let kf = ik2(A.SL, Wf, pole, DIM.upper, DIM.fore);
@@ -819,7 +889,7 @@ export function buildMotion(o) {
     return { S: kf.S, E: kf.E, W: Wf, d, p, r: cross(p, d), relax, tau };
   };
   const SWIVEL = [[0, 0], [0.5, 0], [-0.45, 0], [0, 0.5], [0, -0.5], [0.5, 0.5]]; // 托球时 / 收走之后，肘在自然朝向上再往外（正）或往里拧多少
-  const VIAS = [null, [0.12, -0.16, -0.30], [-0.04, -0.06, -0.37], [0.06, 0.08, -0.34], [0.22, -0.26, -0.20]];
+  const VIAS = [null, [0.3, -0.5, -0.8], [-0.1, -0.15, -0.98], [0.15, 0.3, -0.94], [0.5, -0.8, -0.35]]; // 收手半路上手臂朝哪儿（身体坐标 [前, 上, 右]）
   const restOrder = (() => {
     const first = (pl.rest && pl.rest[mv.stance]) || (mv.stance === 'side' ? 'wing' : 'low');
     return [first, ...Object.keys(REST).filter((k) => k !== first)];
@@ -847,13 +917,21 @@ export function buildMotion(o) {
       if (fa.tau > 0.07 && t < 0.2) pen += sq(Math.max(0, P.R + DIM.rUpper + 0.02 - distSeg(ballAt(t), fa.S, fa.E)));
       // 规则：球一离手，这只手和手臂就得从"球和接球人之间"让开
       if (fa.tau > 0.1 && t < 0.012) { const b = ballAt(t); for (const [pt, rr] of [[hf, 0.045], [ff, 0.04], [fa.E, 0.046], [lerp(fa.S, fa.E, 0.5), DIM.rUpper + 0.004]]) pen += sq(Math.max(0, hideDepth(b, pt, rr) + P.R + 0.01)); }
-      pen += sq(Math.max(0, 0.2 - len(sub(fa.W, fa.S)))); // 手别缩到自己肩膀跟前
+      pen += 4 * sq(Math.max(0, 0.3 - len(sub(fa.W, fa.S)))); // 手别缩到自己肩膀跟前
     }
     return pen;
   };
   let plan = null, planBest = 1e9;
   search: for (let ri = 0; ri < restOrder.length; ri++) for (let hi = 0; hi < SWIVEL.length; hi++) for (let ci = 0; ci < VIAS.length; ci++) {
     const pln = { rest: REST[restOrder[ri]], restKey: restOrder[ri], sw: SWIVEL[hi][0], swR: SWIVEL[hi][1], via: VIAS[ci] };
+    { // 收手要多久：绕的路越远越久，手最快别超过 6 m/s 左右（抛得低、出手快的时候，手还没收完拍子就挥出来了，也没关系）
+      const ro = H2W(AC.F, AC.R, pln.rest.at), rb = pln.rest.rel === 'pel' ? AC.P : AC.SL;
+      const vA = [palmHi[0] - AC.SL[0], palmHi[1] + followUp - AC.SL[1], palmHi[2] - AC.SL[2]], vB = [rb[0] + ro[0] - AC.SL[0], rb[1] + ro[1] - AC.SL[1], rb[2] + ro[2] - AC.SL[2]];
+      const rA = len(vA), rB = len(vB), dA = norm(vA), dB = norm(vB);
+      let via = pln.via ? norm(H2W(AC.F, AC.R, pln.via)) : null;
+      if (!via) { const ob = H2W(AC.F, AC.R, [0.1, -0.5, -0.85]); via = norm([dA[0] + dB[0] + ob[0], dA[1] + dB[1] + ob[1], dA[2] + dB[2] + ob[2]]); }
+      const arc = 0.8 * (Math.acos(clamp(dot(dA, via), -1, 1)) + Math.acos(clamp(dot(via, dB), -1, 1))) * (rA + rB) / 2 + Math.abs(rA - rB);
+      pln.freeT = clamp(Math.max(freeT, 1.5 * arc / 6), 0.2, 0.55); }
     const pn = planPen(pln) + 2e-5 * ri + 1e-5 * ci + 1e-5 * hi;
     if (pn < planBest) { planBest = pn; plan = pln; }
     if (pn < 1e-4) break search;
@@ -916,6 +994,14 @@ export function buildMotion(o) {
   return out;
 }
 
+// 躯干的截面是扁的（左右宽 hw、前后薄 hd，和画出来的一样）：点 p 离躯干某一段的表面多远（负 = 在里面）
+function slabDist(p, a, b, right, hw, hd) {
+  const cp = closestOnSeg(p, a, b), vx = p[0] - cp[0], vy = p[1] - cp[1], vz = p[2] - cp[2];
+  const lat = vx * right[0] + vy * right[1] + vz * right[2];
+  const sag = Math.sqrt(Math.max(0, vx * vx + vy * vy + vz * vz - lat * lat));
+  return (Math.hypot(lat / hw, sag / hd) - 1) * hd;
+}
+
 /** 逐时刻检查：穿模、球提前碰拍、手进球台…… 返回各项最大穿插深度（米）；where 记下最严重的那一处是什么、在什么时刻 */
 function validate(m, o) {
   const st = { body: 0, table: 0, ballBody: 0, early: 0, late: 0, free: 0, leg: 0, nan: 0, hide: -1, hideT: 0, where: {} };
@@ -933,14 +1019,16 @@ function validate(m, o) {
     const J = m.at(t);
     for (const k of ['pelvis', 'chest', 'head', 'elP', 'wrP', 'elF', 'wrF', 'knP', 'knF']) if (!J[k].every(Number.isFinite)) st.nan++;
     const rk = J.racket;
-    const caps = [['torso', J.pelvis, J.mid, DIM.rLo], ['chest', J.mid, J.chest, DIM.rHi], ['head', J.head, J.head, DIM.headR], ['thighP', J.hipP, J.knP, DIM.rThigh], ['thighF', J.hipF, J.knF, DIM.rThigh], ['shinP', J.knP, J.anP, DIM.rShin], ['shinF', J.knF, J.anF, DIM.rShin]];
+    // 腰腹、胸廓按扁的截面算（前后只有十来厘米厚：钟摆发球小臂就是贴着肚子前面过去的），其余按圆的算
+    const Rm = norm(lerp(J.R, J.Rc, 0.45)), TW = [0.15, 0.108], CW = [0.172, 0.114];
+    const caps = [['torso', J.pelvis, J.mid, TW[1] + 0.008, Rm, TW], ['chest', J.mid, J.chest, CW[1] + 0.008, J.Rc, CW], ['head', J.head, J.head, DIM.headR], ['thighP', J.hipP, J.knP, DIM.rThigh], ['thighF', J.hipF, J.knF, DIM.rThigh], ['shinP', J.knP, J.anP, DIM.rShin], ['shinF', J.knF, J.anF, DIM.rShin]];
     const hnd = addmul(J.wrP, J.handP.d, 0.05), fm = lerp(J.elP, J.wrP, 0.55);
-    for (const [nm, a, b, rr] of caps) {
+    for (const [nm, a, b, rr, rt, wd] of caps) {
       up('body', discPen(rk.c, rk.Z, a, b, rr), t, 'racket-' + nm);
-      up('body', spherePen(hnd, 0.042, a, b, rr), t, 'hand-' + nm);
-      up('body', spherePen(fm, DIM.rFore, a, b, rr), t, 'forearm-' + nm);
+      up('body', rt ? 0.042 - slabDist(hnd, a, b, rt, wd[0], wd[1]) : spherePen(hnd, 0.042, a, b, rr), t, 'hand-' + nm);
+      up('body', rt ? DIM.rFore - slabDist(fm, a, b, rt, wd[0], wd[1]) : spherePen(fm, DIM.rFore, a, b, rr), t, 'forearm-' + nm);
     }
-    up('body', spherePen(J.elP, 0.044, J.pelvis, J.mid, DIM.rLo), t, 'elbow-torso'); up('body', spherePen(J.elP, 0.044, J.head, J.head, DIM.headR), t, 'elbow-head');
+    up('body', 0.044 - slabDist(J.elP, J.pelvis, J.mid, Rm, TW[0], TW[1]), t, 'elbow-torso'); up('body', spherePen(J.elP, 0.044, J.head, J.head, DIM.headR), t, 'elbow-head');
     // 球台
     { const nz = rk.Z, drop = DIM.blade * Math.sqrt(Math.max(0, 1 - nz[1] * nz[1]));
       up('table', tablePen([rk.c[0], rk.c[1] - drop + 0.012, rk.c[2]], 0.012), t, 'racket');
@@ -955,8 +1043,8 @@ function validate(m, o) {
         up('free', rr + 0.036 - distSeg(pt, J.elP, J.wrP), t, nm + '-forearm');
         up('free', rr + 0.04 - len(sub(pt, hnd)), t, nm + '-hand');
       }
-      if (t > o.tRel + 0.05) { up('free', DIM.rLo + 0.035 - distSeg(hf, J.pelvis, J.mid), t, 'hand-torso'); up('free', DIM.rHi + 0.03 - distSeg(hf, J.mid, J.chest), t, 'hand-chest'); up('free', DIM.headR + 0.04 - len(sub(hf, J.head)), t, 'hand-head'); }
-      up('free', DIM.rLo + 0.03 - distSeg(J.elF, J.pelvis, J.mid), t, 'elbow-torso'); }
+      if (t > o.tRel + 0.05) { up('free', 0.04 - slabDist(hf, J.pelvis, J.mid, Rm, TW[0], TW[1]), t, 'hand-torso'); up('free', 0.04 - slabDist(hf, J.mid, J.chest, J.Rc, CW[0], CW[1]), t, 'hand-chest'); up('free', DIM.headR + 0.04 - len(sub(hf, J.head)), t, 'hand-head'); }
+      up('free', 0.042 - slabDist(J.elF, J.pelvis, J.mid, Rm, TW[0], TW[1]), t, 'elbow-torso'); }
     // 腿有没有被拉直过头
     up('leg', Math.max(len(sub(J.hipP, J.anP)), len(sub(J.hipF, J.anF))) - (DIM.thigh + DIM.shin), t, 'leg');
     // 球
