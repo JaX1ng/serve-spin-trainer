@@ -1,0 +1,2979 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>侧上还是侧下</title>
+<meta name="description" content="看拍型判断乒乓球发球是侧上还是侧下：旋转由物理引擎算出来，不是预设动画。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Saira+Condensed:wght@500;600;700&family=ZCOOL+QingKe+HuangYou&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* 夜场球馆：深蓝黑的场地、红地胶、蓝球台；界面是裁判台上的记分牌——翻牌数字、窄体数码、粗黑体口令 */
+  --ink:#0b111b; --slab:rgba(15,23,36,.9); --slab2:#18253b; --line:rgba(233,238,246,.14);
+  --text:#e9eef6; --mute:#95a3b8; --ball:#ff9a2e;
+  --x:#ff6257; --y:#35d08b; --z:#4ea9ff;      /* 三根轴：横=上下旋，竖=侧旋，前后=螺旋 */
+  --ok:#9be7b4; --no:#ffa0ad;
+  --f-disp:"ZCOOL QingKe HuangYou","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  --f-num:"Saira Condensed","DIN Alternate","Roboto Condensed","Arial Narrow",sans-serif;
+  --f-body:"Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --r:10px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--ink);color:var(--text);font:14px/1.5 var(--f-body);overflow:hidden;-webkit-font-smoothing:antialiased}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--ball);outline-offset:2px}
+#app{position:relative;height:100%;width:100%;overflow:hidden}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.lbl{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;font:600 13px/1 var(--f-num);letter-spacing:.02em;padding:3px 7px 4px;border-radius:5px;background:rgba(8,13,22,.78);border:1px solid currentColor}
+.lbl b{font-weight:700;font-size:15px}
+.lbl.sm{font-size:12px;border-color:transparent;background:rgba(8,13,22,.6)}
+
+/* 顶栏 */
+#top{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:14px;padding:10px 14px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(8,13,22,.85),rgba(8,13,22,0))}
+#top>*{pointer-events:auto}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand h1{font:400 26px/1 var(--f-disp);margin:0;letter-spacing:.04em;white-space:nowrap}
+.brand h1 i{font-style:normal;color:var(--ball)}
+.brand span{color:var(--mute);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabs{display:flex;background:var(--slab);border:1px solid var(--line);border-radius:999px;padding:3px}
+.tabs button{border:0;background:none;padding:5px 16px;border-radius:999px;color:var(--mute);font-weight:500;white-space:nowrap}
+.tabs button.on{background:var(--text);color:#0b111b}
+.grow{flex:1}
+.drawerBtn{display:none;border:1px solid var(--line);background:var(--slab);border-radius:8px;padding:6px 10px;white-space:nowrap}
+
+/* 侧板 */
+.panel{position:absolute;top:66px;bottom:150px;width:272px;background:var(--slab);border:1px solid var(--line);border-radius:var(--r);
+  overflow:auto;padding:12px 12px 14px;backdrop-filter:blur(6px);scrollbar-width:thin}
+#left{left:12px}
+#right{right:12px;width:286px}
+#right.locked{bottom:auto}
+.panel h2{font:400 17px/1.2 var(--f-disp);letter-spacing:.06em;margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline}
+.panel h2 small{font:400 11px var(--f-body);color:var(--mute);letter-spacing:0}
+.grp{display:flex;flex-direction:column;gap:6px;padding:9px 0;border-top:1px solid var(--line)}
+.grp:first-of-type{border-top:0;padding-top:2px}
+.grp>label,.grp>.cap{font-size:12px;color:var(--mute);display:flex;justify-content:space-between;gap:8px}
+.seg,.chips{display:flex;flex-wrap:wrap;gap:5px}
+.seg button,.chips button{flex:1 1 auto;border:1px solid var(--line);background:transparent;border-radius:7px;padding:5px 8px;font-size:13px;color:var(--text);white-space:nowrap}
+.seg button.on,.chips button.on{background:var(--slab2);border-color:var(--ball);color:#fff}
+.chips button.on{box-shadow:inset 0 -2px 0 var(--ball)}
+select{width:100%;background:var(--slab2);border:1px solid var(--line);border-radius:7px;padding:6px 8px}
+.link{background:none;border:0;color:var(--mute);text-decoration:underline;padding:0;font-size:12px;align-self:flex-start}
+.note{font-size:12px;color:var(--mute);margin:0}
+.note b{color:var(--text);font-weight:500}
+
+/* 滑杆（实验台） */
+.sl{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center}
+.sl label{font-size:12px;color:var(--mute)}
+.sl output{font:600 14px var(--f-num);font-variant-numeric:tabular-nums}
+.sl input{grid-column:1/3;width:100%;accent-color:var(--ball)}
+#labStatus{font-weight:500;padding:7px 9px;border-radius:7px;background:var(--slab2);border-left:3px solid var(--mute);font-size:13px}
+#labStatus.ok{border-color:var(--ok)}#labStatus.bad{border-color:var(--no)}
+
+/* 旋转读数 */
+.bar{display:grid;grid-template-columns:1fr auto;gap:3px 8px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line)}
+.bar .nm{font-size:12px;color:var(--mute)}
+.bar .nm b{font:700 14px var(--f-num);margin-right:6px}
+.bar .val{font:700 20px/1 var(--f-num);font-variant-numeric:tabular-nums;text-align:right}
+.bar .val small{font:500 11px var(--f-body);color:var(--mute);margin-left:3px}
+.bar .desc{grid-column:1/3;font-size:12px}
+.track{grid-column:1/3;height:8px;border-radius:4px;background:var(--slab2);position:relative;overflow:hidden}
+.track::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--mute)}
+.track i{position:absolute;top:0;bottom:0;left:50%;width:0;border-radius:4px}
+.bx .nm b,.bx .val{color:var(--x)}.bx .track i{background:var(--x)}
+.by .nm b,.by .val{color:var(--y)}.by .track i{background:var(--y)}
+.bz .nm b,.bz .val{color:var(--z)}.bz .track i{background:var(--z)}
+.tot{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0 4px;border-top:1px solid var(--line)}
+.tot b{font:700 24px/1 var(--f-num)}
+dl.kv{display:grid;grid-template-columns:1fr auto;gap:3px 10px;margin:0;font-size:12.5px}
+dl.kv dt{color:var(--mute)}dl.kv dd{margin:0;text-align:right;font:600 14px var(--f-num);font-variant-numeric:tabular-nums}
+dl.kv dd.t{font:500 12.5px var(--f-body)}
+.chain{font-size:12.5px;margin:6px 0 0;padding:8px 9px;background:var(--slab2);border-radius:7px}
+.chain b{font-weight:700}
+.up{color:var(--ok)}.dn{color:var(--no)}
+
+/* 视角 */
+#views{position:absolute;top:66px;left:50%;transform:translateX(-50%);display:flex;gap:5px;background:var(--slab);border:1px solid var(--line);border-radius:999px;padding:3px}
+#views button{border:0;background:none;border-radius:999px;padding:4px 11px;font-size:12.5px;color:var(--mute);white-space:nowrap}
+#views button.on{background:var(--slab2);color:#fff}
+
+/* 底部：出题 + 进度条 */
+#dock{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);width:min(760px,calc(100% - 24px));display:flex;flex-direction:column;gap:8px;pointer-events:none}
+#dock>*{pointer-events:auto}
+#stage{background:var(--slab);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;display:flex;flex-direction:column;gap:8px;backdrop-filter:blur(6px)}
+#stage:empty{display:none}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.hint{margin:0;color:var(--mute);font-size:12.5px;text-wrap:balance}
+.btn{border:1px solid var(--line);background:var(--slab2);border-radius:8px;padding:8px 14px;font-weight:500;white-space:nowrap}
+.btn.primary{background:var(--ball);border-color:var(--ball);color:#1a1206;font:400 20px/1 var(--f-disp);letter-spacing:.08em;padding:11px 26px}
+.btn kbd{font:500 11px var(--f-body);opacity:.65;margin-left:6px;border:1px solid currentColor;border-radius:4px;padding:0 4px}
+.answers{display:flex;gap:8px;flex:1}
+.ans{flex:1;border:1px solid var(--line);border-radius:9px;background:var(--slab2);padding:9px 8px 8px;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
+.ans b{font:400 28px/1 var(--f-disp);letter-spacing:.1em}
+.ans small{color:var(--mute);font-size:11.5px}
+.ans.up b{color:var(--text)}.ans:hover{border-color:var(--ball)}
+.ans[disabled]{opacity:.45;cursor:default}
+.verdict{display:flex;align-items:baseline;gap:4px 12px;flex-wrap:wrap;flex:1 1 300px;min-width:0}
+.verdict b{font:400 28px/1 var(--f-disp);letter-spacing:.06em}
+.verdict.ok b{color:var(--ok)}.verdict.no b{color:var(--no)}
+.verdict span{color:var(--text);font-size:13px}
+.verdict span i{font-style:normal;color:var(--mute);font-size:12px;margin-left:10px;white-space:nowrap}
+.why{margin:0;font-size:13px;line-height:1.6}
+.why em{font-style:normal;font-weight:700;font-family:var(--f-num);font-size:15px}
+#transport{background:var(--slab);border:1px solid var(--line);border-radius:var(--r);padding:7px 10px;display:flex;flex-direction:column;gap:6px;backdrop-filter:blur(6px)}
+#transport[hidden]{display:none}
+#transport .row{gap:6px}
+#scrub{flex:1;min-width:120px;accent-color:var(--ball)}
+#timeLbl{font:600 14px var(--f-num);font-variant-numeric:tabular-nums;min-width:74px;text-align:right}
+.mini{border:1px solid var(--line);background:transparent;border-radius:6px;padding:3px 8px;font-size:12px;color:var(--text);white-space:nowrap}
+.mini.on{background:var(--slab2);border-color:var(--ball)}
+.mini.play{min-width:58px;background:var(--slab2);font-weight:700}
+.sep{width:1px;align-self:stretch;background:var(--line);margin:0 2px}
+.tiny{font-size:11.5px;color:var(--mute)}
+#spinRate{width:100%;accent-color:var(--ball)}
+
+.cx{color:var(--x)}.cy{color:var(--y)}.cz{color:var(--z)}.cb{color:#ffe14d}
+ol.steps li b.in{display:inline;font-size:inherit;color:var(--text);letter-spacing:0}
+
+/* 讲解 */
+ol.steps{list-style:none;counter-reset:st;margin:0 0 4px;padding:0;display:flex;flex-direction:column;gap:7px}
+ol.steps li{counter-increment:st;position:relative;padding:7px 9px 8px 34px;background:var(--slab2);border-radius:8px;font-size:13px;line-height:1.55}
+ol.steps li::before{content:counter(st);position:absolute;left:9px;top:7px;width:18px;height:18px;border-radius:50%;background:var(--ball);color:#1a1206;font:700 12px/18px var(--f-num);text-align:center}
+ol.steps li b{display:block;font-weight:700;font-size:12px;color:var(--mute);letter-spacing:.04em}
+ol.steps em{font-style:normal;font-weight:700}
+#pending{color:var(--ball);margin:0 0 6px}
+.note.rule{margin:2px 0 8px;padding:8px 10px;border-left:3px solid var(--ball);background:rgba(255,154,46,.09);border-radius:0 7px 7px 0;color:var(--text);font-size:12.5px;line-height:1.6}
+#err{position:absolute;inset:0;display:none;place-items:center;padding:24px;text-align:center;background:var(--ink)}
+
+@media (max-width:1020px){
+  .brand span{display:none}
+  .panel{display:none;top:58px;bottom:auto;max-height:calc(100% - 230px);z-index:5}
+  .panel.open{display:block}
+  .drawerBtn{display:block}
+  #views{left:12px;transform:none;top:58px;max-width:calc(100% - 24px);overflow-x:auto}
+}
+@media (max-width:560px){
+  #top{gap:8px;padding:8px 10px}
+  .brand h1{font-size:17px;letter-spacing:.01em}
+  .tabs button{padding:4px 12px}
+  .drawerBtn{padding:5px 11px}
+  #right,#left{left:10px;right:10px;width:auto}
+  .panel{max-height:calc(100% - 290px)}
+  .ans b{font-size:23px}
+  .verdict b{font-size:23px}
+  .btn{padding:7px 11px}.btn.primary{font-size:18px;padding:9px 18px}
+  .btn kbd,.ans small{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="gl" aria-label="乒乓球台三维场景"></canvas>
+  <div id="labels"></div>
+
+  <header id="top">
+    <div class="brand"><h1>侧上<i>还是</i>侧下</h1><span>看拍型判断发球旋转</span></div>
+    <nav class="tabs" aria-label="模式">
+      <button type="button" data-mode="practice" class="on">练习</button>
+      <button type="button" data-mode="lab">实验台</button>
+    </nav>
+    <div class="grow"></div>
+    <button type="button" class="drawerBtn" id="btnLeft">设置</button>
+    <button type="button" class="drawerBtn" id="btnRight">讲解</button>
+  </header>
+
+  <div id="views" role="group" aria-label="视角">
+    <button type="button" data-view="recv" class="on">接球视角</button>
+    <button type="button" data-view="close">走近看</button>
+    <button type="button" data-view="side">侧面</button>
+    <button type="button" data-view="top">俯视</button>
+  </div>
+
+  <aside class="panel" id="left" aria-label="设置">
+    <div id="panelPractice">
+      <h2>练习设置 <small>拖动画面转视角，滚轮缩放</small></h2>
+      <p class="note" id="pending" hidden>改好了，下一个球开始按新设置发。</p>
+      <div class="grp"><div class="cap">练习方案</div>
+        <div class="chips" id="presetChips">
+          <button type="button" data-preset="basic">入门</button><button type="button" data-preset="mid">进阶</button><button type="button" data-preset="match">实战</button>
+        </div>
+        <p class="note" id="presetNote"></p>
+      </div>
+      <div class="grp"><div class="cap">对方发什么球 <span>可多选</span></div>
+        <div class="chips" id="typeChips">
+          <button type="button" data-type="pendulum">顺旋转(钟摆)</button><button type="button" data-type="reverse">逆旋转</button>
+          <button type="button" data-type="hook">勾手</button><button type="button" data-type="backhand">反手</button>
+        </div>
+      </div>
+      <div class="grp"><div class="cap">对方持拍手</div>
+        <div class="seg" id="handSeg"><button type="button" data-hand="1">右手</button><button type="button" data-hand="-1">左手</button></div>
+      </div>
+      <div class="grp"><div class="cap">对方站在画面的 <span>选几个就在几个里随机</span></div>
+        <div class="chips" id="posChips"><button type="button" data-pos="0">左边</button><button type="button" data-pos="1">中间</button><button type="button" data-pos="2">右边</button></div>
+        <div class="cap" style="margin-top:4px">球发得</div>
+        <div class="chips" id="lenChips"><button type="button" data-len="0">近（短球）</button><button type="button" data-len="1">远（长球）</button></div>
+      </div>
+      <div class="grp"><label for="styleSel">对方的拍型习惯</label>
+        <select id="styleSel">
+          <option value="random">每球随机换一种</option><option value="standard">标准中抛</option><option value="wrist">手腕小动作</option>
+          <option value="arm">大臂大动作</option><option value="high">高抛（拍面看着更仰）</option><option value="low">低抛快节奏（拍面看着更立）</option>
+        </select>
+      </div>
+      <div class="grp"><div class="cap">假动作 <span>触球后反着收拍</span></div>
+        <div class="seg" id="fakeSeg"><button type="button" data-fake="none">没有</button><button type="button" data-fake="some">有时</button><button type="button" data-fake="all">每球都有</button></div>
+      </div>
+      <div class="grp"><div class="cap">判断选项</div>
+        <div class="seg" id="choiceSeg"><button type="button" data-ch="2">侧上 / 侧下</button><button type="button" data-ch="3">再加"不转"</button></div>
+      </div>
+      <div class="grp"><div class="cap">播放速度</div>
+        <div class="seg" id="speedSeg"><button type="button" data-sp="1">原速</button><button type="button" data-sp="0.5">0.5×</button><button type="button" data-sp="0.25">0.25×</button></div>
+      </div>
+      <div class="grp"><div class="cap">只给你看</div>
+        <div class="seg" id="watchSeg"><button type="button" data-watch="both">拍和球</button><button type="button" data-watch="racket">只看拍（球一离拍就消失）</button></div>
+      </div>
+    </div>
+
+    <div id="panelLab" hidden>
+      <h2>物理实验台 <small>自己摆拍面、定拍速</small></h2>
+      <p class="note">这里没有预设的旋转。你给出<b>拍面</b>和<b>球拍速度</b>，碰撞和飞行全由引擎算；发不过网、出界也照实显示。</p>
+      <div id="labStatus" style="margin-top:8px">—</div>
+      <div class="grp"><div class="cap">载入一个算好的发球，再自己改</div>
+        <div class="seg"><button type="button" class="labEx" data-ex="top">侧上</button><button type="button" class="labEx" data-ex="back">侧下</button><button type="button" class="labEx" data-ex="flat">不转</button></div>
+        <select id="labType" aria-label="动作类型"><option value="pendulum">顺旋转(钟摆)</option><option value="reverse">逆旋转</option><option value="hook">勾手</option><option value="backhand">反手</option></select>
+      </div>
+      <div class="grp" id="labSliders"></div>
+    </div>
+  </aside>
+
+  <aside class="panel" id="right" aria-label="这一球的讲解">
+    <h2>触球那一下 <small id="stageName">—</small></h2>
+    <p class="note" id="readLock">先自己判断。答完这一球，这里会讲触球瞬间拍子对球做了什么。</p>
+    <div id="readBody" hidden>
+      <ol class="steps" id="explain"></ol>
+      <p class="note rule"><b>一句话记住：</b>只看触球那一下，拍子顺着拍面是往上蹭还是往下蹭。往上是侧上，往下是侧下；拍面后仰得越多，"往下蹭"看上去越像往前送。</p>
+      <div class="grp"><div class="cap">三个方向各转多快 <span>点下面看不同时刻</span></div>
+        <div class="chips" id="stageChips">
+          <button type="button" data-stage="hit">触球瞬间</button><button type="button" data-stage="launch">刚离拍</button><button type="button" data-stage="arrive">到你面前</button>
+        </div>
+      </div>
+      <div class="bar bx"><div class="nm"><b>X 横轴</b>上旋 / 下旋</div><div class="val" id="valX">—</div><div class="track"><i id="barX"></i></div><div class="desc" id="descX"></div></div>
+      <div class="bar by"><div class="nm"><b>Y 竖轴</b>侧旋</div><div class="val" id="valY">—</div><div class="track"><i id="barY"></i></div><div class="desc" id="descY"></div></div>
+      <div class="bar bz"><div class="nm"><b>Z 前后轴</b>螺旋</div><div class="val" id="valZ">—</div><div class="track"><i id="barZ"></i></div><div class="desc" id="descZ"></div></div>
+      <div class="tot"><span>合起来</span><span><b id="valT">—</b> <small class="tiny">转/秒</small></span></div>
+      <div class="grp"><div class="cap">"看球怎么转"时只转哪个方向</div>
+        <div class="seg" id="isoSeg"><button type="button" data-iso="all">合成</button><button type="button" data-iso="x">只 X</button><button type="button" data-iso="y">只 Y</button><button type="button" data-iso="z">只 Z</button></div>
+        <label class="cap" for="spinRate">转多快 <span>真实转速太快看不清，这里是放慢的</span></label>
+        <input type="range" id="spinRate" min="0" max="100" value="45">
+      </div>
+      <p class="note">判对错按<b>到你面前</b>的上下旋：到你面前不到 5 转/秒算"不转"。</p>
+    </div>
+  </aside>
+
+  <section id="dock">
+    <div id="stage"></div>
+    <div id="transport" hidden>
+      <div class="row">
+        <button type="button" class="mini play" id="btnPlay">播放</button>
+        <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="时间轴">
+        <span id="timeLbl">0.000 s</span>
+        <span class="sep"></span>
+        <span id="rateSeg" class="row" style="gap:4px" role="group" aria-label="播放速度">
+          <button type="button" class="mini" data-rate="1">1×</button><button type="button" class="mini" data-rate="0.25">¼</button><button type="button" class="mini" data-rate="0.1">1/10</button><button type="button" class="mini" data-rate="0.025">1/40</button>
+        </span>
+        <span class="sep"></span>
+        <button type="button" class="mini" id="tgAids">箭头</button>
+        <button type="button" class="mini" id="tgTrail">轨迹</button>
+      </div>
+    </div>
+  </section>
+  <div id="err"><p>3D 组件没加载出来。检查一下网络，刷新再试。</p></div>
+</div>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/OrbitControls.js"></script>
+<script>
+(() => {
+  // src/physics.js
+  var P = {
+    m: 27e-4,
+    // 球质量 kg
+    R: 0.02,
+    // 球半径 m (40mm 球)
+    g: 9.81,
+    rho: 1.2,
+    // 空气密度 kg/m^3
+    kappa: 1.5,
+    // m R^2 / I，薄球壳 I = 2/3 m R^2
+    tableY: 0.76,
+    tableL: 2.74,
+    tableW: 1.525,
+    netH: 0.1525,
+    netHalfW: 0.915,
+    // 接触面参数：e = e0 + e1*|法向速度|；切向恢复 et = et0 + et1*|切向接触速度|；es = 绕法线自旋保留率
+    table: { mu: 0.25, e0: 0.98, e1: -0.02, et0: 0, et1: 0, es: 1 },
+    rubber: { mu: 1, e0: 0.878, e1: -0.02, et0: 0.819, et1: -0.01, es: 0.805 }
+  };
+  var AREA = Math.PI * P.R * P.R;
+  var VOL = 4 / 3 * Math.PI * P.R ** 3;
+  var add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+  var sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  var mul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+  var dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  var cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  var len = (a) => Math.hypot(a[0], a[1], a[2]);
+  var norm = (a) => {
+    const l = len(a) || 1;
+    return [a[0] / l, a[1] / l, a[2] / l];
+  };
+  var lerp = (a, b, f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+  var addmul = (a, b, s) => [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s];
+  function pw(xs, ys, x) {
+    const n = xs.length;
+    if (x <= xs[0]) return ys[0];
+    if (x >= xs[n - 1]) return ys[n - 1];
+    for (let i = 0; i < n - 1; i++) {
+      if (x <= xs[i + 1]) return ys[i] + (x - xs[i]) / (xs[i + 1] - xs[i]) * (ys[i + 1] - ys[i]);
+    }
+    return ys[n - 1];
+  }
+  var CD_V = [2.5, 7.5, 12.5, 17.5];
+  var CD_SP = [[0, 0.3, 0.7, 0.95, 1.5, 2], [0, 0.4, 0.75, 1.1, 1.3, 2], [0, 0.4, 0.62, 0.95, 1.3, 2], [0, 0.4, 0.5, 0.84, 1.2, 2]];
+  var CD_C = [[0.55, 0.55, 0.55, 0.55, 0.55, 0.55], [0.49, 0.49, 0.55, 0.48, 0.53, 0.53], [0.47, 0.47, 0.53, 0.41, 0.48, 0.48], [0.47, 0.47, 0.51, 0.37, 0.45, 0.45]];
+  function cdOf(v, sp) {
+    if (v <= CD_V[0]) return pw(CD_SP[0], CD_C[0], sp);
+    if (v >= CD_V[3]) return pw(CD_SP[3], CD_C[3], sp);
+    for (let i = 0; i < 3; i++) {
+      if (v <= CD_V[i + 1]) {
+        const a = pw(CD_SP[i], CD_C[i], sp), b = pw(CD_SP[i + 1], CD_C[i + 1], sp);
+        return a + (v - CD_V[i]) / (CD_V[i + 1] - CD_V[i]) * (b - a);
+      }
+    }
+    return 0.5;
+  }
+  var CM = [
+    [2, 0, 0.08, 150, -1852e-10, -1296e-7, 0.0983],
+    [3.5, -11e-4, 0.31, 200, -1667e-10, -3333e-8, 0.1],
+    [7.5, -8e-4, 0.37, 350, -2e-7, 17e-5, 0.0587],
+    [10.5, -658e-6, 0.375, 440, -2604e-10, 3646e-7, -0.0225],
+    [13.5, -56e-5, 0.383, 550, -3571e-10, 5357e-7, -0.0893],
+    [17, -448e-6, 0.371, 650, -1e-7, 23e-5, -0.0375]
+  ];
+  function cmRow(r, w) {
+    const c = w <= r[3] ? r[1] * w + r[2] : r[4] * w * w + r[5] * w + r[6];
+    return c > 0 ? c : 0;
+  }
+  function cmOf(v, w) {
+    if (v <= CM[0][0]) return cmRow(CM[0], w);
+    const n = CM.length;
+    if (v >= CM[n - 1][0]) return cmRow(CM[n - 1], w);
+    for (let i = 0; i < n - 1; i++) {
+      if (v <= CM[i + 1][0]) {
+        const a = cmRow(CM[i], w), b = cmRow(CM[i + 1], w);
+        return a + (v - CM[i][0]) / (CM[i + 1][0] - CM[i][0]) * (b - a);
+      }
+    }
+    return 0.07;
+  }
+  function accel(vx, vy, vz, wx, wy, wz, out) {
+    const v = Math.hypot(vx, vy, vz);
+    const w = Math.hypot(wx, wy, wz);
+    const sp = v > 1e-6 ? P.R * w / v : 0;
+    const kd = 0.5 * P.rho * AREA * cdOf(v, sp) / P.m;
+    const km = cmOf(v, w) * P.rho * VOL / P.m;
+    out[0] = -kd * v * vx + km * (wy * vz - wz * vy);
+    out[1] = -P.g - kd * v * vy + km * (wz * vx - wx * vz);
+    out[2] = -kd * v * vz + km * (wx * vy - wy * vx);
+    return out;
+  }
+  var _a1 = [0, 0, 0];
+  var _a2 = [0, 0, 0];
+  var _a3 = [0, 0, 0];
+  var _a4 = [0, 0, 0];
+  function stepRK4(p, v, w, dt) {
+    const h = dt / 2;
+    accel(v[0], v[1], v[2], w[0], w[1], w[2], _a1);
+    const v2x = v[0] + _a1[0] * h, v2y = v[1] + _a1[1] * h, v2z = v[2] + _a1[2] * h;
+    accel(v2x, v2y, v2z, w[0], w[1], w[2], _a2);
+    const v3x = v[0] + _a2[0] * h, v3y = v[1] + _a2[1] * h, v3z = v[2] + _a2[2] * h;
+    accel(v3x, v3y, v3z, w[0], w[1], w[2], _a3);
+    const v4x = v[0] + _a3[0] * dt, v4y = v[1] + _a3[1] * dt, v4z = v[2] + _a3[2] * dt;
+    accel(v4x, v4y, v4z, w[0], w[1], w[2], _a4);
+    const s = dt / 6;
+    p[0] += s * (v[0] + 2 * v2x + 2 * v3x + v4x);
+    p[1] += s * (v[1] + 2 * v2y + 2 * v3y + v4y);
+    p[2] += s * (v[2] + 2 * v2z + 2 * v3z + v4z);
+    v[0] += s * (_a1[0] + 2 * _a2[0] + 2 * _a3[0] + _a4[0]);
+    v[1] += s * (_a1[1] + 2 * _a2[1] + 2 * _a3[1] + _a4[1]);
+    v[2] += s * (_a1[2] + 2 * _a2[2] + 2 * _a3[2] + _a4[2]);
+  }
+  function collide(v, w, n, u, surf) {
+    const R = P.R, k = P.kappa;
+    const cx = v[0] - R * (w[1] * n[2] - w[2] * n[1]) - u[0];
+    const cy = v[1] - R * (w[2] * n[0] - w[0] * n[2]) - u[1];
+    const cz = v[2] - R * (w[0] * n[1] - w[1] * n[0]) - u[2];
+    const wn = cx * n[0] + cy * n[1] + cz * n[2];
+    if (wn >= 0) return null;
+    const tx = cx - wn * n[0], ty = cy - wn * n[1], tz = cz - wn * n[2];
+    const vt = Math.hypot(tx, ty, tz);
+    const e = Math.min(1, Math.max(0.3, surf.e0 + surf.e1 * -wn));
+    const jn = -(1 + e) * wn;
+    const et = Math.min(1, Math.max(0, surf.et0 + surf.et1 * vt));
+    const alpha = (1 + et) / (1 + k);
+    let jt = alpha * vt;
+    let regime = "grip";
+    if (jt > surf.mu * jn) {
+      jt = surf.mu * jn;
+      regime = "slip";
+    }
+    const s = vt > 1e-9 ? -jt / vt : 0;
+    const Jtx = s * tx, Jty = s * ty, Jtz = s * tz;
+    const v2 = [v[0] + jn * n[0] + Jtx, v[1] + jn * n[1] + Jty, v[2] + jn * n[2] + Jtz];
+    const f = -k / R;
+    const w2 = [
+      w[0] + f * (n[1] * Jtz - n[2] * Jty),
+      w[1] + f * (n[2] * Jtx - n[0] * Jtz),
+      w[2] + f * (n[0] * Jty - n[1] * Jtx)
+    ];
+    if (surf.es !== 1) {
+      const sn = (w2[0] * n[0] + w2[1] * n[1] + w2[2] * n[2]) * (surf.es - 1);
+      w2[0] += sn * n[0];
+      w2[1] += sn * n[1];
+      w2[2] += sn * n[2];
+    }
+    return { v: v2, w: w2, jn, jt, regime, e, et, alpha, wn, vt, vtDir: vt > 1e-9 ? [tx / vt, ty / vt, tz / vt] : [0, 0, 0] };
+  }
+  function spinQuat(q, w, dt) {
+    const wl = Math.hypot(w[0], w[1], w[2]);
+    const ang = wl * dt;
+    if (ang < 1e-12) return q;
+    const s = Math.sin(ang / 2) / wl, c = Math.cos(ang / 2);
+    const ax = w[0] * s, ay = w[1] * s, az = w[2] * s;
+    return [
+      c * q[0] + ax * q[3] + ay * q[2] - az * q[1],
+      c * q[1] - ax * q[2] + ay * q[3] + az * q[0],
+      c * q[2] + ax * q[1] - ay * q[0] + az * q[3],
+      c * q[3] - ax * q[0] - ay * q[1] - az * q[2]
+    ];
+  }
+  function simulate(p0, v0, w0, o = {}) {
+    const dt = o.dt || 1e-3, tMax = o.tMax || 2.5;
+    const ideal = !!o.ideal, rec = !!o.rec;
+    const maxOpp = o.maxOppBounces || 2;
+    const zStop = o.zStop === void 0 ? P.tableL / 2 + 0.9 : o.zStop;
+    const yb = P.tableY + P.R;
+    const hw = P.tableW / 2, hl = P.tableL / 2;
+    let p = [p0[0], p0[1], p0[2]], v = [v0[0], v0[1], v0[2]], w = [w0[0], w0[1], w0[2]];
+    let q = o.q0 ? o.q0.slice() : [0, 0, 0, 1];
+    let t = 0, bounces = 0, oppB = 0, netDone = false, fault = null, stop = null;
+    const ev = [];
+    const S2 = rec ? { dt, t0: 0, n: 0, p: [], v: [], w: [], q: [] } : null;
+    const push = () => {
+      if (S2) {
+        S2.p.push(p[0], p[1], p[2]);
+        S2.v.push(v[0], v[1], v[2]);
+        S2.w.push(w[0], w[1], w[2]);
+        S2.q.push(q[0], q[1], q[2], q[3]);
+        S2.n++;
+      }
+    };
+    push();
+    const maxSteps = Math.ceil(tMax / dt);
+    for (let i = 0; i < maxSteps; i++) {
+      const px = p[0], py = p[1], pz = p[2], vx = v[0], vy = v[1], vz = v[2];
+      stepRK4(p, v, w, dt);
+      if (o.stopY !== void 0 && v[1] < 0 && p[1] <= o.stopY && py > o.stopY) {
+        const f = (py - o.stopY) / (py - p[1]);
+        p = [px + (p[0] - px) * f, o.stopY, pz + (p[2] - pz) * f];
+        v = [vx + (v[0] - vx) * f, vy + (v[1] - vy) * f, vz + (v[2] - vz) * f];
+        q = spinQuat(q, w, dt * f);
+        t += dt * f;
+        stop = "stopY";
+        break;
+      }
+      if (!netDone && pz < 0 && p[2] >= 0) {
+        const f = pz / (pz - p[2]);
+        const yc = py + (p[1] - py) * f, xc = px + (p[0] - px) * f;
+        const clear = yc - P.R - (P.tableY + P.netH);
+        const hit = !ideal && Math.abs(xc) <= P.netHalfW && clear < 0 && yc + P.R > P.tableY;
+        ev.push({ type: "net", t: t + dt * f, x: xc, y: yc, clear, hit });
+        if (hit) {
+          fault = fault || "net";
+          p = [xc, yc, -P.R * 0.5];
+          v = [v[0] * 0.3, Math.min(v[1], 0) * 0.5, -Math.abs(v[2]) * 0.08];
+          w = [w[0] * 0.3, w[1] * 0.3, w[2] * 0.3];
+        } else netDone = true;
+      }
+      if (p[1] <= yb && py >= yb - 1e-9 && v[1] < 0 && py > p[1]) {
+        const f = (py - yb) / (py - p[1]);
+        const xi = px + (p[0] - px) * f, zi = pz + (p[2] - pz) * f;
+        if (ideal || Math.abs(xi) <= hw && Math.abs(zi) <= hl) {
+          const vi = [vx + (v[0] - vx) * f, vy + (v[1] - vy) * f, vz + (v[2] - vz) * f];
+          const res = collide(vi, w, [0, 1, 0], [0, 0, 0], P.table);
+          if (res) {
+            const side = zi < 0 ? "own" : "opp";
+            ev.push({ type: "bounce", t: t + dt * f, p: [xi, yb, zi], side, vIn: vi, wIn: w.slice(), vOut: res.v.slice(), wOut: res.w.slice(), regime: res.regime, n: bounces });
+            bounces++;
+            if (side === "opp") oppB++;
+            p = [xi, yb, zi];
+            v = res.v;
+            w = res.w;
+            const rem = dt * (1 - f);
+            if (rem > 1e-9) stepRK4(p, v, w, rem);
+            if (p[1] < yb) p[1] = yb;
+            if (res.v[1] < 0.12) {
+              stop = "rest";
+            }
+          }
+        }
+      }
+      q = spinQuat(q, w, dt);
+      t += dt;
+      push();
+      if (stop) break;
+      if (p[1] - P.R <= 0) {
+        ev.push({ type: "floor", t, p: p.slice() });
+        stop = "floor";
+        break;
+      }
+      if (o.maxBounces && bounces >= o.maxBounces) {
+        stop = "bounces";
+        break;
+      }
+      if (oppB >= maxOpp) {
+        stop = "opp";
+        break;
+      }
+      if (p[2] > zStop) {
+        stop = "z";
+        break;
+      }
+    }
+    if (S2) {
+      S2.p = Float32Array.from(S2.p);
+      S2.v = Float32Array.from(S2.v);
+      S2.w = Float32Array.from(S2.w);
+      S2.q = Float32Array.from(S2.q);
+    }
+    return { ev, S: S2, end: { t, p, v, w, q }, fault, stop };
+  }
+
+  // src/quat.js
+  var qMul = (a, b) => [
+    a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+    a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+    a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+    a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]
+  ];
+  var qAxis = (ax, ang) => {
+    const s = Math.sin(ang / 2);
+    return [ax[0] * s, ax[1] * s, ax[2] * s, Math.cos(ang / 2)];
+  };
+  var qRot = (q, v) => {
+    const x = q[0], y = q[1], z = q[2], w = q[3];
+    const tx = 2 * (y * v[2] - z * v[1]), ty = 2 * (z * v[0] - x * v[2]), tz = 2 * (x * v[1] - y * v[0]);
+    return [v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx)];
+  };
+  function qFromBasis(X, Y, Z) {
+    const m00 = X[0], m10 = X[1], m20 = X[2], m01 = Y[0], m11 = Y[1], m21 = Y[2], m02 = Z[0], m12 = Z[1], m22 = Z[2];
+    const tr = m00 + m11 + m22;
+    let q;
+    if (tr > 0) {
+      const s = 0.5 / Math.sqrt(tr + 1);
+      q = [(m21 - m12) * s, (m02 - m20) * s, (m10 - m01) * s, 0.25 / s];
+    } else if (m00 > m11 && m00 > m22) {
+      const s = 2 * Math.sqrt(1 + m00 - m11 - m22);
+      q = [0.25 * s, (m01 + m10) / s, (m02 + m20) / s, (m21 - m12) / s];
+    } else if (m11 > m22) {
+      const s = 2 * Math.sqrt(1 + m11 - m00 - m22);
+      q = [(m01 + m10) / s, 0.25 * s, (m12 + m21) / s, (m02 - m20) / s];
+    } else {
+      const s = 2 * Math.sqrt(1 + m22 - m00 - m11);
+      q = [(m02 + m20) / s, (m12 + m21) / s, 0.25 * s, (m10 - m01) / s];
+    }
+    const l = Math.hypot(q[0], q[1], q[2], q[3]);
+    return [q[0] / l, q[1] / l, q[2] / l, q[3] / l];
+  }
+  function qSlerp(a, b, t) {
+    let d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
+    let bb = b;
+    if (d < 0) {
+      d = -d;
+      bb = [-b[0], -b[1], -b[2], -b[3]];
+    }
+    if (d > 0.9995) {
+      const r = [a[0] + (bb[0] - a[0]) * t, a[1] + (bb[1] - a[1]) * t, a[2] + (bb[2] - a[2]) * t, a[3] + (bb[3] - a[3]) * t];
+      const l = Math.hypot(r[0], r[1], r[2], r[3]);
+      return [r[0] / l, r[1] / l, r[2] / l, r[3] / l];
+    }
+    const th = Math.acos(d), s = Math.sin(th), wa = Math.sin((1 - t) * th) / s, wb = Math.sin(t * th) / s;
+    return [a[0] * wa + bb[0] * wb, a[1] * wa + bb[1] * wb, a[2] * wa + bb[2] * wb, a[3] * wa + bb[3] * wb];
+  }
+  function qFromTo(a, b) {
+    const d = dot(a, b);
+    if (d < -0.9999) {
+      let ax = cross(a, [1, 0, 0]);
+      if (len(ax) < 0.01) ax = cross(a, [0, 1, 0]);
+      return qAxis(norm(ax), Math.PI);
+    }
+    const c = cross(a, b);
+    const q = [c[0], c[1], c[2], 1 + d];
+    const l = Math.hypot(q[0], q[1], q[2], q[3]);
+    return [q[0] / l, q[1] / l, q[2] / l, q[3] / l];
+  }
+  var smooth = (u) => u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u);
+
+  // src/body.js
+  var BODY = {
+    upper: 0.29,
+    fore: 0.265,
+    // 上臂、前臂
+    thigh: 0.42,
+    shin: 0.43,
+    // 大腿、小腿
+    shHalf: 0.19,
+    hipHalf: 0.095,
+    // 半肩宽、半髋宽
+    spine: 0.46,
+    pelvisY: 0.84,
+    ankleY: 0.075,
+    grip: 0.165,
+    // 拍面中心到手腕的距离（沿拍柄）
+    rTorso: 0.14,
+    rHead: 0.115
+  };
+  var DEG = Math.PI / 180;
+  function ik2(S2, H, pole, a, b) {
+    let d = sub(H, S2);
+    let L = len(d);
+    const mx = a + b - 4e-3;
+    let S22 = S2;
+    if (L > mx) {
+      S22 = addmul(H, d, -mx / L);
+      d = sub(H, S22);
+      L = mx;
+    }
+    const mn = Math.abs(a - b) + 0.01;
+    if (L < mn) L = mn;
+    const dn = norm(d);
+    const ca = Math.max(-1, Math.min(1, (a * a + L * L - b * b) / (2 * a * L))), sa = Math.sqrt(1 - ca * ca);
+    let pp = addmul(pole, dn, -dot(pole, dn));
+    if (len(pp) < 1e-4) pp = addmul([0, -1, 0], dn, dn[1]);
+    pp = norm(pp);
+    return { S: S22, E: add(addmul(S22, dn, a * ca), mul(pp, a * sa)) };
+  }
+  function closestOnSeg(p, a, b) {
+    const ab = sub(b, a), l2 = dot(ab, ab) || 1e-9;
+    const t = Math.max(0, Math.min(1, dot(sub(p, a), ab) / l2));
+    return addmul(a, ab, t);
+  }
+  var rotY = (v, a) => {
+    const c = Math.cos(a), s = Math.sin(a);
+    return [v[0] * c + v[2] * s, v[1], -v[0] * s + v[2] * c];
+  };
+  function makeBody(o) {
+    const { T, hand, pc, pose, face } = o;
+    const side = T.stance === "side";
+    const F = side ? [-hand, 0, 0] : [0, 0, 1];
+    const pl = side ? [0, 0, -1] : [-hand, 0, 0];
+    const fl = [-pl[0], 0, -pl[2]];
+    const rk = (t) => {
+      const p = pose(t);
+      const n = qRot(p.q, [0, 0, face]), l = qRot(p.q, [0, 1, 0]);
+      const c = addmul(p.b, n, -55e-4);
+      return { c, l, n, W: addmul(c, l, -BODY.grip) };
+    };
+    const ts = [];
+    const t0 = o.tReady - 0.02, t1 = o.tDone + 0.03;
+    for (let i = 0; i <= 26; i++) ts.push(t0 + (t1 - t0) * i / 26);
+    for (const t of [-0.04, -0.02, 0, 0.02, 0.04]) ts.push(t);
+    const RK = ts.map(rk);
+    const W0 = rk(0).W;
+    const build = (dF, dl, th) => {
+      const off = (side ? 0.1 : 0.02) + dl;
+      const py = BODY.pelvisY + 0.03 - 0.09 * Math.max(0, Math.min(1, (th / DEG - 32) / 21));
+      const Pv = [pc[0] - F[0] * dF + pl[0] * off, py, pc[2] - F[2] * dF + pl[2] * off];
+      const sd = [F[0] * Math.sin(th), Math.cos(th), F[2] * Math.sin(th)];
+      const C = addmul(Pv, sd, BODY.spine);
+      return { P: Pv, sd, C, Sp: addmul(C, pl, BODY.shHalf), Sf: addmul(C, fl, BODY.shHalf), th, dF, dl };
+    };
+    const shoulderAt = (L2, W) => {
+      const d = sub(W, W0), dl = len(d);
+      const k = dl > 0.3 ? 0.3 / dl : 1;
+      return addmul(L2.Sp, d, 0.22 * k);
+    };
+    const headAt = (L2, C) => add(addmul(C, L2.sd, 0.175), [0, 0.035, 0]);
+    const evalCand = (L2, pole2) => {
+      let clip = 0, reach = 0, maxPen = 0;
+      const pen = (p, r, a, b, rr) => {
+        const cp = closestOnSeg(p, a, b);
+        const d = len(sub(p, cp));
+        const need = r + rr + 0.012;
+        if (d < need) {
+          clip += (need - d) ** 2;
+          if (need - d - 0.012 > maxPen) maxPen = need - d - 0.012;
+        }
+      };
+      for (let i = 0; i < RK.length; i++) {
+        const r = RK[i];
+        const Sp = shoulderAt(L2, r.W);
+        const k = ik2(Sp, r.W, pole2, BODY.upper, BODY.fore);
+        const C = lerp(k.S, L2.Sf, 0.5);
+        const hd = headAt(L2, C);
+        const d = len(sub(r.W, Sp));
+        if (d > 0.53) reach += (d - 0.53) ** 2;
+        if (d < 0.2) reach += (0.2 - d) ** 2;
+        for (const [pt, rr] of [[k.E, 0.045], [lerp(k.E, r.W, 0.5), 0.04]]) {
+          const dip = P.tableY + 6e-3 - (pt[1] - rr);
+          if (dip > 0 && Math.abs(pt[0]) < P.tableW / 2 + rr && pt[2] > -P.tableL / 2 - rr) {
+            clip += dip * dip;
+            if (dip - 6e-3 > maxPen) maxPen = dip - 6e-3;
+          }
+        }
+        for (const ob of [[L2.P, C, BODY.rTorso], [hd, hd, BODY.rHead]]) {
+          const cp = closestOnSeg(r.c, ob[0], ob[1]);
+          const u = norm(sub(r.c, cp));
+          const eff = 0.076 * Math.sqrt(Math.max(0, 1 - dot(u, r.n) ** 2)) + 6e-3;
+          pen(r.c, eff, ob[0], ob[1], ob[2]);
+          pen(addmul(r.W, r.l, 0.045), 0.045, ob[0], ob[1], ob[2]);
+          pen(k.E, 0.045, ob[0], ob[1], ob[2]);
+          pen(lerp(k.E, r.W, 0.5), 0.04, ob[0], ob[1], ob[2]);
+        }
+      }
+      return { clip, reach, maxPen };
+    };
+    const palmLo = o.palmAt(-1e9).p, palmHi = o.palmAt(1e9).p;
+    const tossY = o.tossY || [palmLo[1], palmHi[1]];
+    const tossEval = (L2) => {
+      let clip = 0, maxPen = 0, reach = 0;
+      const hd = headAt(L2, L2.C);
+      const yn = Math.max(tossY[0], Math.min(tossY[1], hd[1]));
+      const dH = Math.hypot(hd[0] - pc[0], hd[1] - yn, hd[2] - pc[2]), needH = BODY.rHead + P.R + 0.05;
+      if (dH < needH) {
+        clip += (needH - dH) ** 2;
+        maxPen = Math.max(maxPen, needH - 0.05 - dH);
+      }
+      const needT = BODY.rTorso + P.R + 0.03;
+      for (let y = tossY[0]; y <= tossY[1] + 1e-9; y += 0.04) {
+        const q = [pc[0], y, pc[2]];
+        const d = len(sub(q, closestOnSeg(q, L2.P, L2.C)));
+        if (d < needT) {
+          clip += 0.3 * (needT - d) ** 2;
+          maxPen = Math.max(maxPen, needT - 0.03 - d);
+        }
+      }
+      for (const pm of [palmLo, palmHi]) {
+        const d = len(sub(pm, L2.Sf));
+        if (d > 0.6) reach += (d - 0.6) ** 2;
+        if (d < 0.16) reach += (0.16 - d) ** 2;
+      }
+      return { clip, maxPen, reach };
+    };
+    const pole0 = norm([T.elbow[0] * hand, T.elbow[1], T.elbow[2]]);
+    const dFs = side ? [0.38, 0.45, 0.52, 0.59, 0.66, 0.73] : [0.36, 0.42, 0.48, 0.54, 0.6, 0.66];
+    const dF0 = side ? 0.55 : 0.48, th0 = (side ? 40 : 34) * DEG;
+    const cands = [];
+    for (const dF of dFs) for (const dl of side ? [-0.2, -0.1, -0.05, 0, 0.05, 0.1] : [-0.1, -0.05, 0, 0.05, 0.1]) for (const thd of [32, 39, 46, 53]) {
+      const L2 = build(dF, dl, thd * DEG);
+      const e = evalCand(L2, pole0);
+      const te = tossEval(L2);
+      L2.toss = te;
+      let cost = 400 * e.clip + 300 * e.reach + 400 * te.clip + 300 * te.reach + 1.5 * (dF - dF0) ** 2 + 1.5 * dl * dl + 2.5 * (L2.th - th0) ** 2;
+      if (Math.abs(L2.P[0]) < P.tableW / 2 + 0.16 && L2.P[2] > -P.tableL / 2 - 0.2) cost += 60 * (L2.P[2] + P.tableL / 2 + 0.2) ** 2 + 0.5;
+      cands.push({ L: L2, cost, e });
+    }
+    cands.sort((a, b) => a.cost - b.cost);
+    const poles = [pole0, norm(rotY(pole0, 0.6)), norm(rotY(pole0, -0.6)), norm(add(pole0, [0, 0.6, 0])), norm(add(pole0, [0, -0.6, 0])), norm(rotY(pole0, 1.2)), norm(rotY(pole0, -1.2))];
+    let best = null;
+    for (let i = 0; i < Math.min(6, cands.length); i++) {
+      for (let j = 0; j < poles.length; j++) {
+        const e = j === 0 ? cands[i].e : evalCand(cands[i].L, poles[j]);
+        const cost = cands[i].cost - 400 * cands[i].e.clip - 300 * cands[i].e.reach + 400 * e.clip + 300 * e.reach + 0.03 * (1 - dot(poles[j], pole0));
+        if (!best || cost < best.cost) best = { L: cands[i].L, pole: poles[j], cost, e };
+      }
+    }
+    const L = best.L, pole = best.pole;
+    const hipF = addmul(L.P, fl, BODY.hipHalf), hipP = addmul(L.P, pl, BODY.hipHalf);
+    const anF = [L.P[0] + fl[0] * 0.27 + F[0] * 0.05, BODY.ankleY, L.P[2] + fl[2] * 0.27 + F[2] * 0.05];
+    const anP = [L.P[0] + pl[0] * 0.25 - F[0] * 0.02, BODY.ankleY, L.P[2] + pl[2] * 0.25 - F[2] * 0.02];
+    const knF = ik2(hipF, anF, add(F, mul(fl, 0.25)), BODY.thigh, BODY.shin).E;
+    const knP = ik2(hipP, anP, add(F, mul(pl, 0.25)), BODY.thigh, BODY.shin).E;
+    const freeAt = (plan2, palm) => {
+      if (palm.after <= 0) return palm.p;
+      const u = smooth(palm.after / 0.42), v = 1 - u;
+      const A = add(palm.p, [0, 0.05 * Math.sin(Math.PI * Math.min(1, palm.after / 0.22)), 0]);
+      const c = plan2.ctrl, r = plan2.rest;
+      return [v * v * A[0] + 2 * u * v * c[0] + u * u * r[0], v * v * A[1] + 2 * u * v * c[1] + u * u * r[1], v * v * A[2] + 2 * u * v * c[2] + u * u * r[2]];
+    };
+    const tsF = [];
+    {
+      const a = -o.palmAt(0).after;
+      for (const t of [-1e6, a - 0.12, a - 0.06, a]) tsF.push(t);
+      for (let i = 1; i <= 14; i++) tsF.push(a + 0.5 * i / 14);
+      for (let i = 0; i <= 12; i++) tsF.push(Math.min(-0.3, a + 0.5) + (o.tDone + 0.3) * i / 12);
+    }
+    const rel = (f, l, y) => add(add(addmul(L.Sf, F, f), mul(fl, l)), [0, y, 0]);
+    const rests = [
+      rel(-0.1, 0.04, -0.37),
+      // 松松地垂在肩膀下面
+      rel(-0.2, 0.1, -0.34),
+      // 往后、往外带一点
+      rel(0, 0.17, -0.35),
+      // 垂在外侧
+      rel(-0.3, 0.03, -0.26),
+      // 收到身后
+      rel(-0.12, 0.12, -0.22),
+      // 抬高一点收在腰侧
+      rel(0.08, 0.26, -0.28),
+      // 往外撇开
+      rel(-0.32, 0.14, -0.12)
+      // 肘往后拉，手收到肋边
+    ];
+    const polesF = [
+      norm(add(add(mul(F, -0.9), mul(fl, 0.25)), [0, -0.3, 0])),
+      // 肘朝后下
+      norm(add(add(mul(F, -0.5), mul(fl, 0.8)), [0, -0.1, 0])),
+      // 肘朝外
+      norm(add(add(mul(F, -0.7), mul(fl, 0.3)), [0, 0.5, 0])),
+      // 肘朝后上
+      norm(add(add(mul(F, -0.2), mul(fl, 0.6)), [0, 0.8, 0]))
+      // 肘朝外上（架起来）
+    ];
+    const evalPlan = (plan2) => {
+      let pen = 0, maxPen = 0;
+      const why = {};
+      let cat = "";
+      const hit = (d, need) => {
+        if (d < need) {
+          pen += (need - d) ** 2;
+          if (need - d > maxPen) maxPen = need - d;
+          if (!(need - d < (why[cat] || 0))) why[cat] = need - d;
+        }
+      };
+      for (const t of tsF) {
+        const palm = o.palmAt(t);
+        const Wf = freeAt(plan2, palm);
+        const kf = ik2(L.Sf, Wf, plan2.pole, BODY.upper, BODY.fore);
+        const r = rk(t);
+        const kp = ik2(shoulderAt(L, r.W), r.W, pole, BODY.upper, BODY.fore);
+        const mid = lerp(kf.E, Wf, 0.5);
+        for (const [pt, rr, isHand] of [[Wf, 0.045, 1], [mid, 0.04, 0], [kf.E, 0.042, 0]]) {
+          if (palm.after > 0 || !isHand) {
+            const rl = sub(pt, r.c), dn = dot(rl, r.n), rho = len(sub(rl, mul(r.n, dn)));
+            cat = "blade";
+            if (rho < 0.078 + rr) hit(Math.abs(dn), rr + 0.012);
+            cat = "grip";
+            hit(len(sub(pt, addmul(r.W, r.l, 0.035))), rr + 0.05);
+            cat = "forearm";
+            hit(len(sub(pt, closestOnSeg(pt, kp.E, r.W))), rr + 0.045);
+          }
+          const dip = P.tableY + 8e-3 - (pt[1] - rr);
+          if (!isHand || palm.after > 0) {
+            if (dip > 0 && Math.abs(pt[0]) < P.tableW / 2 + rr && pt[2] > -P.tableL / 2 - rr) {
+              pen += dip * dip;
+              if (dip > maxPen) maxPen = dip;
+              why.table = Math.max(why.table || 0, dip);
+            }
+          }
+        }
+        cat = "fold";
+        hit(len(sub(Wf, L.Sf)), 0.2);
+        cat = "torso";
+        if (palm.after > 0) hit(len(sub(Wf, closestOnSeg(Wf, L.P, L.C))), BODY.rTorso + 0.03);
+        hit(len(sub(kf.E, closestOnSeg(kf.E, L.P, L.C))), BODY.rTorso + 0.01);
+        if (palm.after > 0.06 && t < 0.2) {
+          const bp = o.ballAt(t).p;
+          cat = "ball";
+          hit(len(sub(bp, closestOnSeg(bp, kf.E, Wf))), P.R + 0.05);
+          hit(len(sub(bp, closestOnSeg(bp, kf.S, kf.E))), P.R + 0.055);
+        }
+      }
+      return { pen, maxPen, why };
+    };
+    let plan = null, freeE = null;
+    const relPt = o.palmAt(1e9).p;
+    search: for (let j = 0; j < polesF.length; j++) for (let i = 0; i < rests.length; i++) {
+      const mid = lerp(relPt, rests[i], 0.5);
+      const ctrls = [mid, add(mid, mul(fl, 0.2)), add(add(mid, mul(fl, 0.24)), [0, 0.12, 0]), add(add(mid, mul(F, 0.12)), mul(fl, 0.28))];
+      for (let c = 0; c < ctrls.length; c++) {
+        const pl_ = { rest: rests[i], ctrl: ctrls[c], pole: polesF[j] };
+        const e = evalPlan(pl_);
+        const score = e.pen + 2e-5 * i + 1e-5 * c + 4e-5 * j;
+        if (!freeE || score < freeE.score) {
+          freeE = { score, maxPen: e.maxPen, i, c, j, why: e.why };
+          plan = pl_;
+        }
+        if (e.pen < 1e-9) break search;
+      }
+    }
+    const poleFree = plan.pole;
+    const at = (t) => {
+      const r = rk(t);
+      const k = ik2(shoulderAt(L, r.W), r.W, pole, BODY.upper, BODY.fore);
+      const palm = o.palmAt(t);
+      const Wf = freeAt(plan, palm);
+      if (palm.after > 0) {
+        const ox = Math.abs(Wf[0]) - P.tableW / 2, oz = -P.tableL / 2 - Wf[2], out = Math.max(ox, oz);
+        const w = 1 - smooth((out - 0.03) / 0.06), need = P.tableY + 0.034 - Wf[1];
+        if (w > 0 && need > 0) Wf[1] += need * w;
+      }
+      let kf = ik2(L.Sf, Wf, poleFree, BODY.upper, BODY.fore);
+      for (let k2 = 1; k2 <= 3; k2++) {
+        const E = kf.E;
+        if (!(E[1] - 0.042 < P.tableY + 4e-3 && Math.abs(E[0]) < P.tableW / 2 + 0.042 && E[2] > -P.tableL / 2 - 0.042)) break;
+        kf = ik2(L.Sf, Wf, add(poleFree, [0, 0.7 * k2, 0]), BODY.upper, BODY.fore);
+      }
+      const C = lerp(k.S, kf.S, 0.5);
+      const neck = addmul(C, L.sd, 0.07);
+      const head = headAt(L, C);
+      const bp = o.ballAt(Math.min(t, 0.04)).p;
+      const aim = t < 0.04 ? bp : lerp(bp, [0, 1, 1.4], smooth((t - 0.04) / 0.35));
+      const lk = sub(aim, head);
+      const hx = lk[0] + F[0] * 0.08, hz = lk[2] + F[2] * 0.08, hh = Math.hypot(hx, hz) || 1e-6;
+      const pit = Math.max(-50 * DEG, Math.min(22 * DEG, Math.atan2(lk[1], hh)));
+      const look = [head[0] + hx / hh * Math.cos(pit), head[1] + Math.sin(pit), head[2] + hz / hh * Math.cos(pit)];
+      return {
+        pelvis: L.P,
+        chest: C,
+        neck,
+        head,
+        look,
+        F,
+        pl,
+        fl,
+        sd: L.sd,
+        shP: k.S,
+        elP: k.E,
+        wrP: r.W,
+        shF: kf.S,
+        elF: kf.E,
+        wrF: Wf,
+        hipP,
+        hipF,
+        knP,
+        knF,
+        anP,
+        anF,
+        racket: r
+      };
+    };
+    return { at, layout: L, pole, stats: { maxPen: best.e.maxPen, reach: best.e.reach, cost: best.cost, tossPen: L.toss.maxPen, tossReach: L.toss.reach, freePen: freeE.maxPen, freePlan: `${freeE.i}${freeE.c}${freeE.j}`, freeWhy: freeE.why } };
+  }
+
+  // src/serve.js
+  var RPS = 2 * Math.PI;
+  var DEG2 = Math.PI / 180;
+  var TH_RPS = 5;
+  var U = (rng, r) => r[0] + (r[1] - r[0]) * rng();
+  var TYPES = {
+    // 钟摆：小臂吊着，拍头朝下，从身体外侧往肚子方向摆
+    pendulum: { name: "\u6B63\u624B\u987A\u65CB\u8F6C\uFF08\u949F\u6446\uFF09", short: "\u987A\u65CB\u8F6C", side: -1, face: 1, stance: "side", head: [-0.25, -0.95, 0.1], pivot: [0.2, 1, -0.2], elbow: [0.1, 0.55, -0.8], arcScale: 1, pre: 1, post: 0.6, ready: 0.6 },
+    // 逆旋转：抬肘，拍头朝下往里扣，从肚子前面往外甩
+    reverse: { name: "\u6B63\u624B\u9006\u65CB\u8F6C", short: "\u9006\u65CB\u8F6C", side: 1, face: 1, stance: "side", head: [0.3, -0.9, -0.25], pivot: [0, 1, 0.15], elbow: [-0.4, 0.5, -0.6], arcScale: 0.85, pre: 0.75, post: 1, ready: 0.8, wrist: 0.8 },
+    // 勾手：抬肘，手腕内勾，拍头朝上，拍子先收在胸前，再从里往外、往下勾出去
+    hook: { name: "\u52FE\u624B\u53D1\u7403", short: "\u52FE\u624B", side: 1, face: 1, stance: "side", head: [0.15, 0.75, 0.6], pivot: [0.1, 1, -0.25], elbow: [0.1, 0.15, -1], arcScale: 1, pre: 1, post: 0.5, ready: 0.97, rHead: [0.25, 0.9, 0.3], rFace: [0.87, 0.1, -0.5], back: 0.13, lift: 0.04 },
+    // 反手：正对球台，拍子从左腹前往右前方送
+    backhand: { name: "\u53CD\u624B\u53D1\u7403", short: "\u53CD\u624B", side: 1, face: -1, stance: "front", head: [0.9, -0.25, 0.2], pivot: [-0.6, 0.35, -0.7], elbow: [-0.7, -0.1, 0.7], arcScale: 1, pre: 0.85, post: 1, ready: 0.75, back: 0.05, lift: 0.025 }
+  };
+  var TYPE_KEYS = ["pendulum", "reverse", "hook", "backhand"];
+  var STYLES = {
+    standard: { name: "\u6807\u51C6\u4E2D\u629B", wMax: [40, 54], rise: [0.3, 0.55], kappa: [31, 42], arcR: [0.22, 0.3], pre: [1.2, 1.5], post: [1, 1.3], clear: [0.012, 0.04] },
+    wrist: { name: "\u624B\u8155\u5C0F\u52A8\u4F5C", wMax: [36, 50], rise: [0.22, 0.4], kappa: [29, 41], arcR: [0.13, 0.17], pre: [1, 1.3], post: [0.8, 1.1], clear: [0.012, 0.035] },
+    arm: { name: "\u5927\u81C2\u949F\u6446", wMax: [44, 58], rise: [0.35, 0.65], kappa: [33, 43], arcR: [0.33, 0.42], pre: [1.1, 1.4], post: [1.1, 1.4], clear: [0.015, 0.05] },
+    high: { name: "\u9AD8\u629B", wMax: [46, 62], rise: [1, 1.7], kappa: [35, 43], arcR: [0.2, 0.3], pre: [1.2, 1.5], post: [1, 1.3], clear: [0.015, 0.05] },
+    low: { name: "\u4F4E\u629B\u5FEB\u8282\u594F", wMax: [34, 48], rise: [0.17, 0.24], kappa: [27, 40], arcR: [0.16, 0.26], pre: [1, 1.3], post: [0.9, 1.2], clear: [0.01, 0.03] }
+  };
+  var STYLE_KEYS = ["standard", "wrist", "arm", "high", "low"];
+  function spinParts(w, v) {
+    const hl = Math.hypot(v[0], v[2]) || 1;
+    const f = [v[0] / hl, 0, v[2] / hl];
+    const h = [f[2], 0, -f[0]];
+    return { top: dot(w, h), side: w[1], cork: dot(w, f), h, f };
+  }
+  function spinRule(vOut, vb, chi, kappa, s, wMax) {
+    const dv = sub(vOut, vb);
+    const D = len(dv);
+    const d = mul(dv, 1 / D);
+    const hl = Math.hypot(d[0], d[2]) || 1e-9;
+    const h = [d[2] / hl, 0, -d[0] / hl];
+    const e = cross(d, h);
+    const cc = Math.cos(chi) * s, sc = Math.sin(chi);
+    const wh = [e[0] * cc + h[0] * sc, e[1] * cc + h[1] * sc, e[2] * cc + h[2] * sc];
+    let sk = Math.sin(kappa);
+    const kR = P.kappa / P.R;
+    if (wMax && kR * D * sk > wMax) sk = wMax / (kR * D);
+    const ck = Math.sqrt(1 - sk * sk);
+    const t = cross(wh, d);
+    const n = [d[0] * ck + t[0] * sk, d[1] * ck + t[1] * sk, d[2] * ck + t[2] * sk];
+    return { w: mul(wh, kR * D * sk), n, dv, D };
+  }
+  function inverseRacket(vb, dv, n, surf) {
+    const dn = dot(dv, n);
+    const dt_ = sub(dv, mul(n, dn));
+    const dtm = len(dt_);
+    const a = surf.e1, b = 1 + surf.e0;
+    const x = Math.abs(a) < 1e-9 ? dn / b : (-b + Math.sqrt(Math.max(0, b * b + 4 * a * dn))) / (2 * a);
+    const a2 = surf.et1, b2 = 1 + surf.et0, c2 = (1 + P.kappa) * dtm;
+    const y = Math.abs(a2) < 1e-9 ? c2 / b2 : (-b2 + Math.sqrt(Math.max(0, b2 * b2 + 4 * a2 * c2))) / (2 * a2);
+    return add(vb, add(mul(n, x), mul(dt_, dtm > 1e-9 ? y / dtm : 0)));
+  }
+  function guessVxz(pc, tgt, vy0) {
+    const h = pc[1] - (P.tableY + P.R);
+    const vi = Math.sqrt(vy0 * vy0 + 2 * P.g * h);
+    const t1 = (vy0 + vi) / P.g, T2 = 2 * 0.93 * vi / P.g;
+    const dist = tgt.z - pc[2];
+    const vz = dist / (t1 + 0.75 * T2) * 1.12;
+    return [(tgt.x - pc[0]) / dist * vz, vz];
+  }
+  function evalLaunch(pc, v, rule) {
+    const sr = rule(v);
+    const sim = simulate(pc, v, sr.w, { dt: 2e-3, ideal: true, maxBounces: 2, tMax: 2.4, zStop: 1e9 });
+    let b1 = null, b2 = null, net = null;
+    for (const e of sim.ev) {
+      if (e.type === "bounce") {
+        if (!b1) b1 = e;
+        else if (!b2) b2 = e;
+      } else if (e.type === "net" && !net) net = e;
+    }
+    if (!b1 || !b2) return null;
+    return { b1, b2, net, sr };
+  }
+  function solveLaunch(pc, rule, tgt, vy0, g0) {
+    const resid = (vx2, vz2) => {
+      const r = evalLaunch(pc, [vx2, vy0, vz2], rule);
+      if (!r) return null;
+      return { r: [r.b2.p[0] - tgt.x, r.b2.p[2] - tgt.z], info: r };
+    };
+    let vx = g0[0], vz = g0[1];
+    let R0 = resid(vx, vz);
+    if (!R0) return null;
+    for (let it = 0; it < 14; it++) {
+      const rn = Math.hypot(R0.r[0], R0.r[1]);
+      if (rn < 3e-4) break;
+      const hh = 1e-3;
+      const Rx = resid(vx + hh, vz), Rz = resid(vx, vz + hh);
+      if (!Rx || !Rz) return null;
+      const a = (Rx.r[0] - R0.r[0]) / hh, b = (Rz.r[0] - R0.r[0]) / hh, c = (Rx.r[1] - R0.r[1]) / hh, d = (Rz.r[1] - R0.r[1]) / hh;
+      const det = a * d - b * c;
+      if (Math.abs(det) < 1e-10) return null;
+      let dx = (-R0.r[0] * d + R0.r[1] * b) / det, dz = (-a * R0.r[1] + c * R0.r[0]) / det;
+      let sc = 1;
+      const dl = Math.hypot(dx, dz);
+      if (dl > 1.5) sc = 1.5 / dl;
+      let okStep = false;
+      for (let k = 0; k < 5; k++) {
+        const Rn = resid(vx + dx * sc, vz + dz * sc);
+        if (Rn && Math.hypot(Rn.r[0], Rn.r[1]) < rn) {
+          vx += dx * sc;
+          vz += dz * sc;
+          R0 = Rn;
+          okStep = true;
+          break;
+        }
+        sc *= 0.5;
+      }
+      if (!okStep) break;
+    }
+    if (Math.hypot(R0.r[0], R0.r[1]) > 25e-4) return null;
+    if (R0.info.b1.p[2] > -0.06 || !R0.info.net) return null;
+    return { v: [vx, vy0, vz], vy0, clear: R0.info.net.clear, info: R0.info };
+  }
+  var VY_SLOW = [0.1, 0.4, 0.7, 1, 1.3, 1.6, 1.9];
+  var VY_FAST = [-0.3, -0.7, -1.1, -1.5, -2, -2.5, -3.1, -3.8];
+  function findLaunch(pc, rule, tgt, branch, cT) {
+    const pick2 = (list) => {
+      const res = [];
+      let warm = null;
+      for (const vy of list) {
+        let r = solveLaunch(pc, rule, tgt, vy, warm || guessVxz(pc, tgt, vy));
+        if (!r && warm) r = solveLaunch(pc, rule, tgt, vy, guessVxz(pc, tgt, vy));
+        if (r) warm = [r.v[0], r.v[2]];
+        res.push(r);
+      }
+      for (let i = 0; i < res.length; i++) {
+        if (!res[i] || res[i].clear < cT) continue;
+        if (i === 0 || !res[i - 1]) return res[i].clear <= cT + 0.03 ? res[i] : null;
+        let a = res[i - 1], b = res[i];
+        for (let k = 0; k < 6; k++) {
+          const vm = (a.vy0 + b.vy0) / 2;
+          const m = solveLaunch(pc, rule, tgt, vm, [a.v[0], a.v[2]]) || solveLaunch(pc, rule, tgt, vm, [b.v[0], b.v[2]]);
+          if (!m) break;
+          if (m.clear < cT) a = m;
+          else b = m;
+        }
+        return b.clear <= cT + 0.03 ? b : null;
+      }
+      let best = null;
+      for (const r of res) if (r && r.clear >= 6e-3 && (!best || r.clear > best.clear)) best = r;
+      return best;
+    };
+    return branch === "slow" ? pick2(VY_SLOW) || pick2(VY_FAST) : pick2(VY_FAST) || pick2(VY_SLOW);
+  }
+  function judge(sim) {
+    const out = { legal: false, why: "", b1: null, b2: null, net: null, arrive: null };
+    let stage = 0;
+    for (const e of sim.ev) {
+      if (stage === 0) {
+        if (e.type === "bounce" && e.side === "own") {
+          out.b1 = e;
+          stage = 1;
+        } else if (e.type === "bounce") {
+          out.why = "\u6CA1\u5148\u843D\u672C\u65B9\u53F0\u9762\uFF0C\u76F4\u63A5\u6253\u5230\u4E86\u5BF9\u9762";
+          return out;
+        } else if (e.type === "net") {
+          out.why = e.hit ? "\u6CA1\u843D\u53F0\u5C31\u4E0B\u7F51\u4E86" : "\u6CA1\u5148\u843D\u672C\u65B9\u53F0\u9762\u5C31\u8FC7\u7F51\u4E86";
+          return out;
+        } else if (e.type === "floor") {
+          out.why = "\u7403\u6CA1\u4E0A\u53F0";
+          return out;
+        }
+      } else if (stage === 1) {
+        if (e.type === "net") {
+          out.net = e;
+          if (e.hit) {
+            out.why = "\u4E0B\u7F51";
+            return out;
+          }
+          stage = 2;
+        } else if (e.type === "bounce") {
+          out.why = "\u5728\u672C\u65B9\u53F0\u9762\u5F39\u4E86\u4E24\u6B21";
+          return out;
+        } else if (e.type === "floor") {
+          out.why = "\u7B2C\u4E00\u8DF3\u540E\u6CA1\u8FC7\u7F51\uFF0C\u51FA\u754C";
+          return out;
+        }
+      } else if (stage === 2) {
+        if (e.type === "bounce" && e.side === "opp") {
+          out.b2 = e;
+          out.legal = true;
+          out.why = "\u5408\u6CD5\u53D1\u7403";
+          out.arrive = e;
+          return out;
+        } else if (e.type === "floor") {
+          out.why = "\u8FC7\u7F51\u540E\u51FA\u754C";
+          return out;
+        }
+      }
+    }
+    if (!out.why) out.why = stage === 0 ? "\u7403\u6CA1\u4E0A\u53F0" : stage === 1 ? "\u6CA1\u8FC7\u7F51" : "\u8FC7\u7F51\u540E\u6CA1\u843D\u53F0";
+    return out;
+  }
+  function classOf(topRad) {
+    const r = topRad / RPS;
+    return r >= TH_RPS ? "top" : r <= -TH_RPS ? "back" : "flat";
+  }
+  function simToss(xc, zc, yStart, rise, yc) {
+    let u0 = Math.sqrt(2 * P.g * rise);
+    const Ta = Math.min(0.22, Math.max(0.12, 0.09 + 0.022 * u0));
+    for (let k = 0; k < 2; k++) {
+      const up = simulate([xc, 2, zc], [0, u0, 0], [0, 0, 0], { dt: 2e-3, tMax: u0 / P.g + 0.06, rec: true, zStop: 1e9 });
+      let top = 2;
+      for (let i = 1; i < up.S.n * 3; i += 3) if (up.S.p[i] > top) top = up.S.p[i];
+      const got = top - 2;
+      if (got > 0.01) u0 *= Math.sqrt(rise / got);
+    }
+    const yRel = yStart + u0 * Ta / 2;
+    if (yRel + rise < yc + 0.04) return null;
+    const sim = simulate([xc, yRel, zc], [0, u0, 0], [0, 0, 0], { dt: 1e-3, tMax: 4, rec: true, stopY: yc, zStop: 1e9 });
+    if (sim.stop !== "stopY") return null;
+    return { u0, Ta, yStart, yRel, T: sim.end.t, vb: sim.end.v.slice(), S: sim.S, apex: yRel + rise, pc: sim.end.p.slice() };
+  }
+  function simDrop(xc, zc, vfall, yc) {
+    let h = vfall * vfall / (2 * P.g);
+    if (h < 1e-4) return { u0: 0, Ta: 0.15, yStart: yc, yRel: yc, T: 0, vb: [0, 0, 0], S: null, apex: yc, pc: [xc, yc, zc], drop: true };
+    const run = () => simulate([xc, yc + h, zc], [0, 0, 0], [0, 0, 0], { dt: 1e-3, tMax: 4, rec: true, stopY: yc, zStop: 1e9 });
+    for (let k = 0; k < 3; k++) {
+      const got = -run().end.v[1];
+      if (got > 1e-3) h *= (vfall / got) ** 2;
+    }
+    const sim = run();
+    return { u0: 0, Ta: 0.15, yStart: yc + h, yRel: yc + h, T: sim.end.t, vb: sim.end.v.slice(), S: sim.S, apex: yc + h, pc: sim.end.p.slice(), drop: true };
+  }
+  function hermite(p0, m0, p1, m1, T, u) {
+    const u2 = u * u, u3 = u2 * u;
+    const h00 = 2 * u3 - 3 * u2 + 1, h10 = (u3 - 2 * u2 + u) * T, h01 = -2 * u3 + 3 * u2, h11 = (u3 - u2) * T;
+    return [
+      h00 * p0[0] + h10 * m0[0] + h01 * p1[0] + h11 * m1[0],
+      h00 * p0[1] + h10 * m0[1] + h01 * p1[1] + h11 * m1[1],
+      h00 * p0[2] + h10 * m0[2] + h01 * p1[2] + h11 * m1[2]
+    ];
+  }
+  function buildSwing(pc, n, vr, T, hand, st, fake, cls, rng) {
+    const V = len(vr);
+    const bc = addmul(pc, n, -P.R);
+    const head0 = [T.head[0] * hand, T.head[1], T.head[2]];
+    let l = sub(head0, mul(n, dot(head0, n)));
+    if (len(l) < 0.15) l = sub([hand * -0.5, -0.5, 0.5], mul(n, dot([hand * -0.5, -0.5, 0.5], n)));
+    l = qRot(qAxis(n, (rng() * 20 - 10) * DEG2), norm(l));
+    const Z = mul(n, T.face);
+    const X = cross(l, Z);
+    const qc = qFromBasis(X, l, Z);
+    if (V < 0.25) {
+      const st0 = { b: bc, q: qc };
+      return { pose: () => st0, T1: 0.2, T2: 0.2, Tb: 0.2, bc, qc, fake: false, tReady: -0.5, tDone: 0.3, clipTable: false, clipBall: 0 };
+    }
+    const vh = mul(vr, 1 / V);
+    const ph = [T.pivot[0] * hand, T.pivot[1], T.pivot[2]];
+    let c = sub(ph, mul(vh, dot(ph, vh)));
+    if (len(c) < 0.25) c = sub([0, 1, 0], mul(vh, vh[1]));
+    if (len(c) < 0.25) c = sub([0, 0, -1], mul(vh, -vh[2]));
+    c = norm(c);
+    const L = U(rng, st.arcR) * T.arcScale;
+    const Pv = addmul(bc, c, L);
+    const ax = norm(cross(vh, c));
+    const Om = V / L;
+    const pw_ = 2.3;
+    let phiS = -U(rng, st.pre) * (T.pre || 1), phiE = U(rng, st.post) * (T.post || 1);
+    let T1 = -phiS * pw_ / Om, T2 = phiE * pw_ / Om;
+    if (T1 > 0.42) {
+      T1 = 0.42;
+      phiS = -T1 * Om / pw_;
+    }
+    if (T2 > 0.42) {
+      T2 = 0.42;
+      phiE = T2 * Om / pw_;
+    }
+    const Tb = 0.42;
+    const bodyDir = T.stance === "side" ? [hand, 0, 0] : [0, 0, -1];
+    const wr = (T.wrist || 0) * (Math.sign(dot(X, bodyDir)) || 1) * T.face;
+    let exAxis = null, exAng = 0;
+    if (T.rHead) {
+      const lr = norm([T.rHead[0] * hand, T.rHead[1], T.rHead[2]]);
+      let nr = [T.rFace[0] * hand, T.rFace[1], T.rFace[2]];
+      nr = norm(sub(nr, mul(lr, dot(nr, lr))));
+      const Zr = mul(nr, T.face);
+      const qd = qFromBasis(cross(lr, Zr), lr, Zr);
+      const qs = qMul(qAxis(ax, phiS), qc);
+      let qr = qMul([-qs[0], -qs[1], -qs[2], qs[3]], qd);
+      if (qr[3] < 0) qr = [-qr[0], -qr[1], -qr[2], -qr[3]];
+      const sh = Math.hypot(qr[0], qr[1], qr[2]);
+      if (sh > 1e-6) {
+        exAxis = [qr[0] / sh, qr[1] / sh, qr[2] / sh];
+        exAng = 2 * Math.atan2(sh, qr[3]);
+      }
+    }
+    const cock = (phi) => phi < 0 ? Math.pow(phi / phiS, 1.5) : -0.3 * Math.pow(phi / phiE, 1.5);
+    const arc = (phi) => {
+      const r = qAxis(ax, phi);
+      let q = qMul(r, qc);
+      if (exAxis || wr) {
+        const g = cock(phi);
+        if (exAxis) q = qMul(q, qAxis(exAxis, exAng * g));
+        if (wr) q = qMul(q, qAxis([0, 1, 0], wr * g));
+      }
+      return { b: add(Pv, qRot(r, sub(bc, Pv))), q };
+    };
+    const start2 = arc(phiS);
+    const r0 = arc(phiS * (T.ready || 0.6));
+    const rb = r0.b.slice();
+    {
+      const dx = rb[0] - pc[0], dz = rb[2] - pc[2], dh = Math.hypot(dx, dz), need = 0.2;
+      if (dh < need) {
+        const ux = dh > 1e-3 ? dx / dh : -vh[0], uz = dh > 1e-3 ? dz / dh : -vh[2];
+        const ul = Math.hypot(ux, uz) || 1;
+        rb[0] = pc[0] + ux / ul * need;
+        rb[2] = pc[2] + uz / ul * need;
+      }
+    }
+    const ready = { b: rb, q: r0.q };
+    let fk = null;
+    const Tf = 0.14;
+    if (fake) {
+      const up = cls === "top" ? -1 : 1;
+      let dh = [vr[0], 0, vr[2]];
+      dh = len(dh) > 0.3 ? norm(dh) : [0, 0, 1];
+      const room = Math.max(0, Math.min(0.12, bc[1] - P.tableY - 0.1));
+      const fb = up > 0 ? add(bc, add(mul(dh, 0.13), [0, 0.22, 0])) : add(bc, add(mul(dh, 0.14), [0, -room, 0.02]));
+      let nh = [n[0], 0, n[2]];
+      nh = len(nh) > 0.2 ? norm(nh) : [0, 0, 1];
+      const el = up > 0 ? -10 * DEG2 : 55 * DEG2;
+      const nf = [nh[0] * Math.cos(el), Math.sin(el), nh[2] * Math.cos(el)];
+      fk = { b: fb, q: qMul(qFromTo(n, nf), qc) };
+    }
+    const pose = (t) => {
+      if (t <= -T1 - Tb) return ready;
+      if (t < -T1) {
+        const u2 = smooth((t + T1 + Tb) / Tb);
+        return { b: lerp(ready.b, start2.b, u2), q: qSlerp(ready.q, start2.q, u2) };
+      }
+      if (t <= 0) return arc(phiS * (1 - Math.pow((t + T1) / T1, pw_)));
+      const hon = t < T2 ? arc(phiE * (1 - Math.pow(1 - t / T2, pw_))) : arc(phiE);
+      if (!fk) return hon;
+      const u = Math.min(1, t / Tf);
+      return { b: hermite(bc, vr, fk.b, [0, 0, 0], Tf, u), q: qSlerp(hon.q, fk.q, smooth(u)) };
+    };
+    const tDone = Math.max(T2, fk ? Tf : 0);
+    let clipTable = false;
+    for (let i = 0; i <= 40; i++) {
+      const t = -T1 - Tb + (tDone + T1 + Tb) * i / 40;
+      const pz = pose(t), nz = qRot(pz.q, [0, 0, 1]);
+      const drop = 0.078 * Math.sqrt(Math.max(0, 1 - nz[1] * nz[1])), reach = 0.078;
+      if (pz.b[1] - drop < P.tableY + 4e-3 && pz.b[2] + reach > -P.tableL / 2 && Math.abs(pz.b[0]) < P.tableW / 2 + reach) {
+        clipTable = true;
+        break;
+      }
+      const lz = qRot(pz.q, [0, 1, 0]);
+      for (const [dd, rr] of [[0.13, 0.042], [0.175, 0.036]]) {
+        const hp = addmul(pz.b, lz, -dd);
+        if (hp[1] - rr < P.tableY + 4e-3 && hp[2] + rr > -P.tableL / 2 && Math.abs(hp[0]) < P.tableW / 2 + rr) {
+          clipTable = true;
+          break;
+        }
+      }
+      if (clipTable) break;
+    }
+    return { pose, T1, T2, Tb, bc, qc, pivot: Pv, L, axis: ax, c, phiS, phiE, fake: !!fk, tReady: -T1 - Tb, tDone, clipTable };
+  }
+  function sampleS(S2, t) {
+    const f = t / S2.dt;
+    let i = Math.floor(f);
+    if (i < 0) i = 0;
+    const last = S2.n - 1;
+    if (i >= last) {
+      const j2 = last * 3, k2 = last * 4;
+      return { p: [S2.p[j2], S2.p[j2 + 1], S2.p[j2 + 2]], v: [S2.v[j2], S2.v[j2 + 1], S2.v[j2 + 2]], w: [S2.w[j2], S2.w[j2 + 1], S2.w[j2 + 2]], q: [S2.q[k2], S2.q[k2 + 1], S2.q[k2 + 2], S2.q[k2 + 3]] };
+    }
+    const a = f - i, j = i * 3, k = i * 4;
+    const q = [S2.q[k] + (S2.q[k + 4] - S2.q[k]) * a, S2.q[k + 1] + (S2.q[k + 5] - S2.q[k + 1]) * a, S2.q[k + 2] + (S2.q[k + 6] - S2.q[k + 2]) * a, S2.q[k + 3] + (S2.q[k + 7] - S2.q[k + 3]) * a];
+    const ql = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+    return {
+      p: [S2.p[j] + (S2.p[j + 3] - S2.p[j]) * a, S2.p[j + 1] + (S2.p[j + 4] - S2.p[j + 1]) * a, S2.p[j + 2] + (S2.p[j + 5] - S2.p[j + 2]) * a],
+      v: [S2.v[j], S2.v[j + 1], S2.v[j + 2]],
+      w: [S2.w[j], S2.w[j + 1], S2.w[j + 2]],
+      q: [q[0] / ql, q[1] / ql, q[2] / ql, q[3] / ql]
+    };
+  }
+  function assemble(base) {
+    const { toss, pc, n, vr, col, sim, T, hand, swing } = base;
+    const verdict = judge(sim);
+    const launch = col ? spinParts(col.w, col.v) : null;
+    let arrive = null;
+    if (verdict.arrive) {
+      const a = verdict.arrive;
+      arrive = { ...spinParts(a.wOut, a.vOut), w: a.wOut.slice(), v: a.vOut.slice(), t: a.t, p: a.p.slice() };
+    }
+    const cls = arrive ? classOf(arrive.top) : null;
+    const tRel = -toss.T;
+    const tPalm0 = tRel - toss.Ta;
+    const tStart = Math.min(tPalm0, swing.tReady) - 0.45;
+    const tEnd = Math.max(sim.end.t, swing.tDone) + 0.05;
+    const q0 = [0, 0, 0, 1];
+    const ballAt = (t) => {
+      if (t >= 0 && col) {
+        const s = sampleS(sim.S, t);
+        s.phase = "flight";
+        return s;
+      }
+      if (t >= 0) {
+        const y = pc[1] + toss.vb[1] * t - 0.5 * P.g * t * t;
+        return { p: [pc[0], Math.max(P.R, y), pc[2]], v: [0, toss.vb[1] - P.g * t, 0], w: [0, 0, 0], q: q0, phase: "miss" };
+      }
+      if (t >= tRel && toss.S) {
+        const s = sampleS(toss.S, t - tRel);
+        s.phase = "toss";
+        return s;
+      }
+      if (toss.drop || t <= tPalm0) return { p: [pc[0], toss.yStart, pc[2]], v: [0, 0, 0], w: [0, 0, 0], q: q0, phase: "hand" };
+      const tau = t - tPalm0, acc = toss.u0 / toss.Ta;
+      return { p: [pc[0], toss.yStart + 0.5 * acc * tau * tau, pc[2]], v: [0, acc * tau, 0], w: [0, 0, 0], q: q0, phase: "hand" };
+    };
+    const palmAt = (t) => {
+      const b = ballAt(Math.min(t, tRel)).p;
+      return { p: [b[0], b[1] - P.R - 0.02, b[2]], after: t - tRel };
+    };
+    let body = null, clipBall = 0;
+    if (!base.lab) {
+      body = makeBody({ T, hand, pc, pose: swing.pose, face: T.face, tReady: swing.tReady, tDone: swing.tDone, palmAt, ballAt, tossY: [toss.yStart, toss.apex] });
+      for (let t = -swing.T1; t < -4e-3; t += 4e-3) {
+        const pz = swing.pose(t), nz = qRot(pz.q, [0, 0, T.face]), bp = ballAt(t).p;
+        const rel = sub(bp, pz.b), dn = dot(rel, nz), rho = len(sub(rel, mul(nz, dn)));
+        if (rho < 0.078 && Math.abs(dn) < P.R - 4e-3) clipBall = Math.max(clipBall, P.R - Math.abs(dn));
+      }
+    }
+    let clipArm = 0;
+    if (body && col) {
+      for (let t = 6e-3; t < 0.16; t += 0.01) {
+        const J = body.at(t), bp = ballAt(t).p;
+        for (const [a, b, rr] of [[J.shP, J.elP, 0.045], [J.elP, J.wrP, 0.038], [J.shF, J.elF, 0.045], [J.elF, J.wrF, 0.04]]) {
+          const ab = sub(b, a), l2 = dot(ab, ab) || 1e-9, u = Math.max(0, Math.min(1, dot(sub(bp, a), ab) / l2));
+          const d = len(sub(bp, addmul(a, ab, u)));
+          if (d < rr + P.R) clipArm = Math.max(clipArm, rr + P.R - d);
+        }
+      }
+    }
+    const an = {};
+    if (col) {
+      const dv = sub(col.v, toss.vb);
+      const sp = spinParts(col.w, col.v);
+      const h = sp.h;
+      let uf = cross(n, h);
+      uf = norm(uf);
+      const rel = sub(vr, toss.vb);
+      an.openDeg = Math.asin(Math.max(-1, Math.min(1, n[1]))) / DEG2;
+      an.yawDeg = Math.atan2(n[0], n[2]) / DEG2;
+      an.epsDeg = Math.atan2(dv[1], Math.hypot(dv[0], dv[2])) / DEG2;
+      an.kappaDeg = Math.acos(Math.max(-1, Math.min(1, dot(norm(dv), n)))) / DEG2;
+      an.dv = dv;
+      an.uf = uf;
+      an.racketAlong = dot(vr, uf);
+      an.ballAlong = -dot(toss.vb, uf);
+      an.relAlong = dot(rel, uf);
+      an.vrSpeed = len(vr);
+      an.vfall = -toss.vb[1];
+      an.regime = col.regime;
+      an.ballSpeed = len(col.v);
+      const rn = dot(rel, n);
+      an.brush = sub(rel, mul(n, rn));
+      an.push = rn;
+      an.spotUp = -n[1];
+      an.spotSide = -dot(n, h);
+    }
+    return {
+      ...base,
+      verdict,
+      legal: verdict.legal,
+      launch,
+      arrive,
+      cls,
+      tRel,
+      tPalm0,
+      tStart,
+      tEnd,
+      ballAt,
+      body,
+      an,
+      clipBall,
+      clipArm,
+      racketAt: swing.pose,
+      events: sim.ev
+    };
+  }
+  function forward(pc, vb, n, vr, surf) {
+    const col = collide(vb, [0, 0, 0], n, vr, surf);
+    if (!col) return { col: null, sim: { ev: [], S: null, end: { t: 0.7 }, fault: "miss" } };
+    const sim = simulate(pc, col.v, col.w, { dt: 1e-3, rec: true, tMax: 2.4, maxOppBounces: 2 });
+    return { col, sim };
+  }
+  function generateServe(cfg, rng = Math.random) {
+    for (let attempt = 0; attempt < 16; attempt++) {
+      const s = tryGenerate(cfg, rng, attempt);
+      if (s) {
+        s.attempts = attempt + 1;
+        return s;
+      }
+    }
+    return null;
+  }
+  function tryGenerate(cfg, rng, attempt) {
+    const fail = (why) => {
+      if (cfg._dbg) cfg._dbg.push(why);
+      return null;
+    };
+    const T = TYPES[cfg.type], hand = cfg.hand || 1;
+    const styleKey = cfg.style && STYLES[cfg.style] ? cfg.style : STYLE_KEYS[Math.floor(rng() * STYLE_KEYS.length)];
+    const st = STYLES[styleKey];
+    const side = T.side * hand;
+    let tgt;
+    if (cfg.target) {
+      const jit = cfg.jitter === void 0 ? 1 : cfg.jitter;
+      tgt = { x: Math.max(-0.62, Math.min(0.62, cfg.target.x + (rng() * 2 - 1) * 0.11 * jit)), z: Math.max(0.28, Math.min(1.27, cfg.target.z + (rng() * 2 - 1) * 0.07 * jit)) };
+    } else {
+      tgt = { x: (rng() * 2 - 1) * 0.5, z: cfg.len === "short" ? U(rng, [0.34, 0.52]) : U(rng, [0.85, 1.22]) };
+    }
+    const lenClass = tgt.z < 0.55 ? "short" : tgt.z < 0.9 ? "half" : "long";
+    const xc = cfg.pos === void 0 ? hand * U(rng, [0.25, 0.55]) : cfg.pos * 0.42 + (rng() * 2 - 1) * 0.1;
+    const hc = (lenClass === "long" ? U(rng, [0.09, 0.15]) : lenClass === "half" ? U(rng, [0.1, 0.18]) : U(rng, [0.13, 0.22])) + (T.lift || 0);
+    const zc = -P.tableL / 2 - (lenClass === "short" ? U(rng, [0.1, 0.2]) : U(rng, [0.17, 0.28])) - (T.back || 0);
+    const yc = P.tableY + hc;
+    let rise = U(rng, st.rise);
+    if (cfg.intent === "back" && attempt > 5) rise = Math.max(rise, 0.4 + 0.05 * attempt);
+    const toss = simToss(xc, zc, P.tableY + U(rng, [0.07, 0.13]), rise, yc);
+    if (!toss) return fail("toss");
+    const pc = toss.pc, vb = toss.vb;
+    const cap = Math.atan(P.rubber.mu) - 2 * DEG2;
+    let kappa = Math.min(U(rng, st.kappa) * DEG2, cap);
+    let wMax = U(rng, st.wMax) * RPS;
+    let chi;
+    if (cfg.intent === "top") {
+      chi = (rng() < 0.2 ? U(rng, [-6, 10]) : U(rng, [12, 62])) * DEG2;
+      if (lenClass === "short") {
+        chi = Math.min(chi, U(rng, [10, 38]) * DEG2);
+        wMax *= 0.8;
+      }
+    } else if (cfg.intent === "back") {
+      chi = -U(rng, [58, 80]) * DEG2;
+      kappa = Math.min(cap, kappa + (4 + attempt) * DEG2);
+      wMax *= 1.1;
+    } else chi = -U(rng, [25, 45]) * DEG2;
+    const mkRule = (ch) => (v) => spinRule(v, vb, ch, kappa, side, wMax);
+    const branch = lenClass === "long" ? "fast" : lenClass === "short" ? rng() < 0.9 ? "slow" : "fast" : rng() < 0.6 ? "slow" : "fast";
+    const cT = U(rng, st.clear);
+    let Ln = findLaunch(pc, mkRule(chi), tgt, branch, cT);
+    if (!Ln) return fail("launch");
+    if (cfg.intent !== "top") {
+      const want = cfg.intent === "back" ? -U(rng, [6.5, 20]) * RPS : U(rng, [-2.5, 2.5]) * RPS;
+      const arrTop = (ch, warm) => {
+        const r = solveLaunch(pc, mkRule(ch), tgt, Ln.vy0, [warm[0], warm[2]]);
+        if (!r) return null;
+        return { top: spinParts(r.info.b2.wOut, r.info.b2.vOut).top, chi: ch, r };
+      };
+      let cur = arrTop(chi, Ln.v);
+      if (!cur) return fail("chi0");
+      const dir = cur.top > want ? -1 : 1;
+      let other = null;
+      for (let k = 0; k < 14 && !other; k++) {
+        const nx = Math.max(-88 * DEG2, Math.min(30 * DEG2, cur.chi + dir * 9 * DEG2));
+        if (nx === cur.chi) break;
+        const f = arrTop(nx, cur.r.v);
+        if (!f) break;
+        if ((f.top - want) * dir >= 0) other = f;
+        else cur = f;
+      }
+      if (!other) {
+        if (cfg.intent === "back" && cur.top < -(TH_RPS + 1) * RPS) {
+          chi = cur.chi;
+          Ln = cur.r;
+        } else return fail("not-enough-back");
+      } else {
+        let lo = dir < 0 ? other : cur, hi = dir < 0 ? cur : other;
+        for (let k = 0; k < 7; k++) {
+          const fm = arrTop((lo.chi + hi.chi) / 2, lo.r.v);
+          if (!fm) break;
+          if (fm.top > want) hi = fm;
+          else lo = fm;
+        }
+        const best = Math.abs(lo.top - want) < Math.abs(hi.top - want) ? lo : hi;
+        chi = best.chi;
+        Ln = best.r;
+      }
+      if (Ln.clear < 6e-3 || Ln.clear > 0.075) {
+        Ln = findLaunch(pc, mkRule(chi), tgt, branch, cT);
+        if (!Ln) return fail("relaunch");
+      }
+    }
+    const sr = Ln.info.sr;
+    const n = norm(sr.n);
+    const vr = inverseRacket(vb, sr.dv, n, P.rubber);
+    const { col, sim } = forward(pc, vb, n, vr, P.rubber);
+    if (!col || col.regime !== "grip") return fail("slip");
+    const swing = buildSwing(pc, n, vr, T, hand, st, !!cfg.fake, cfg.intent, rng);
+    if (swing.clipTable) return fail("clip-table");
+    const s = assemble({ type: cfg.type, hand, style: styleKey, intent: cfg.intent, target: tgt, lenClass, toss, pc, n, vr, col, sim, T, swing, chi, kappa, fake: !!cfg.fake });
+    if (!s.legal) return fail("illegal:" + s.verdict.why);
+    if (s.verdict.net.clear < 4e-3) return fail("net-margin");
+    const b1 = s.verdict.b1.p, b2 = s.verdict.b2.p;
+    if (Math.abs(b1[0]) > P.tableW / 2 - 0.02 || b1[2] > -0.04) return fail("b1-edge");
+    if (Math.abs(b2[0]) > P.tableW / 2 - 0.02 || b2[2] > P.tableL / 2 - 0.02) return fail("b2-edge");
+    if (s.cls !== cfg.intent) return fail("class:" + s.cls);
+    if (s.clipBall > 6e-3) return fail("clip-ball");
+    if (s.body.stats.maxPen > 0.02) return fail("clip-body");
+    if (s.body.stats.reach > 0.02) return fail("reach");
+    if (s.body.stats.tossPen > 4e-3) return fail("toss-head");
+    if (s.body.stats.tossReach > 3e-3) return fail("toss-reach");
+    if (s.body.stats.freePen > 0.02) return fail("free-hand");
+    if (s.clipArm > 8e-3) return fail("clip-arm");
+    return s;
+  }
+  function manualServe(lab, rng = Math.random) {
+    const T = TYPES[lab.type || "pendulum"];
+    const hand = lab.hand || 1;
+    const yc = P.tableY + lab.hc;
+    const toss = simDrop(lab.xc, lab.zc === void 0 ? -1.5 : lab.zc, lab.vfall, yc);
+    const pc = toss.pc, vb = toss.vb;
+    const a = lab.openDeg * DEG2, g = lab.yawDeg * DEG2;
+    const n = [Math.sin(g) * Math.cos(a), Math.sin(a), Math.cos(g) * Math.cos(a)];
+    const vr = lab.vr.slice();
+    const surf = lab.rubber || P.rubber;
+    const { col, sim } = forward(pc, vb, n, vr, surf);
+    const st = { arcR: [0.26, 0.26], pre: [1.25, 1.25], post: [1.1, 1.1] };
+    const fixed = () => 0.5;
+    const swing = buildSwing(pc, n, vr, T, hand, st, false, "flat", fixed);
+    const s = assemble({ type: lab.type || "pendulum", hand, style: "lab", intent: null, target: null, toss, pc, n, vr, col, sim, T, swing, lab: true });
+    if (!col) s.verdict.why = "\u62CD\u5B50\u6CA1\u78B0\u5230\u7403\uFF08\u62CD\u9762\u662F\u80CC\u7740\u7403\u8D70\u7684\uFF09";
+    return s;
+  }
+  function toLab(s) {
+    return { type: s.type, hand: s.hand, xc: s.pc[0], zc: s.pc[2], hc: s.pc[1] - P.tableY, vfall: -s.toss.vb[1], openDeg: s.an.openDeg, yawDeg: s.an.yawDeg, vr: s.vr.slice() };
+  }
+
+  // src/main.js
+  var T3 = window.THREE;
+  var $ = (s, r = document) => r.querySelector(s);
+  var $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  var DEG3 = Math.PI / 180;
+  var clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  var smooth2 = (u) => u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u);
+  var pick = (a) => a[Math.floor(Math.random() * a.length)];
+  var CLS = { top: "\u4FA7\u4E0A", back: "\u4FA7\u4E0B", flat: "\u4E0D\u8F6C" };
+  var PRESETS = {
+    basic: { fake: "none", choices: 2, speed: 0.5, watch: "both", style: "standard", note: "\u534A\u901F\u64AD\u653E\uFF0C\u6CA1\u6709\u5047\u52A8\u4F5C\uFF0C\u5BF9\u624B\u7528\u540C\u4E00\u79CD\u4E60\u60EF\u53D1\u3002\u5148\u628A\u62CD\u578B\u770B\u660E\u767D\u3002" },
+    mid: { fake: "some", choices: 2, speed: 1, watch: "both", style: "random", note: "\u539F\u901F\u3002\u5BF9\u624B\u6BCF\u7403\u6362\u4E00\u79CD\u4E60\u60EF\uFF0C\u6709\u65F6\u89E6\u7403\u540E\u53CD\u7740\u6536\u62CD\u3002" },
+    match: { fake: "all", choices: 3, speed: 1, watch: "both", style: "random", note: '\u539F\u901F\uFF0C\u6BCF\u7403\u90FD\u6709\u5047\u52A8\u4F5C\uFF0C\u8FD8\u8981\u5206\u51FA"\u4E0D\u8F6C"\u3002' }
+  };
+  var STORE = "pp-spin-v2";
+  var S = {
+    mode: "practice",
+    phase: "ready",
+    serve: null,
+    t: 0,
+    lastT: null,
+    playing: false,
+    rate: 1,
+    stopAt: null,
+    answer: null,
+    view: "recv",
+    home: "recv",
+    aids: true,
+    trail: true,
+    iso: "all",
+    spinView: false,
+    spinRate: 0.45,
+    dirty: false,
+    live: null,
+    set: { preset: "basic", types: { pendulum: true, reverse: true, hook: true, backhand: true }, hand: 1, pos: [true, true, true], len: [true, true], style: "standard", fake: "none", choices: 2, speed: 0.5, watch: "both" },
+    lab: { type: "pendulum", hand: 1, xc: 0.35, zc: -1.5, hc: 0.16, vfall: 3, openDeg: 62, yawDeg: -14, vr: [1.6, -0.6, 4.4], mu: P.rubber.mu, et: P.rubber.et0 }
+  };
+  function load(extra) {
+    try {
+      const d = extra && extra.set ? extra : JSON.parse(localStorage.getItem(STORE) || "null");
+      if (!d || !d.set) return;
+      Object.assign(S.set, d.set);
+      if (!Array.isArray(S.set.pos) || S.set.pos.length !== 3) S.set.pos = [true, true, true];
+      if (!Array.isArray(S.set.len) || S.set.len.length !== 2) S.set.len = [true, true];
+    } catch (e) {
+    }
+  }
+  function save() {
+    try {
+      localStorage.setItem(STORE, JSON.stringify({ set: S.set }));
+    } catch (e) {
+    }
+  }
+  function start(hot) {
+    if (!T3 || !T3.OrbitControls) {
+      $("#err").style.display = "grid";
+      return;
+    }
+    load(hot);
+    if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ set: S.set }));
+    const canvas = $("#gl");
+    const renderer = new T3.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputEncoding = T3.sRGBEncoding;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = T3.PCFSoftShadowMap;
+    const C = (hex) => new T3.Color(hex).convertSRGBToLinear();
+    const scene = new T3.Scene();
+    scene.background = new T3.Color(725275);
+    scene.fog = new T3.Fog(C(725275), 11, 30);
+    const camera = new T3.PerspectiveCamera(36, 1, 0.02, 60);
+    const controls = new T3.OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.14;
+    controls.minDistance = 0.08;
+    controls.maxDistance = 14;
+    controls.maxPolarAngle = Math.PI * 0.96;
+    controls.zoomSpeed = 0.9;
+    scene.add(new T3.HemisphereLight(15134463, 5916224, 0.95));
+    const sun = new T3.DirectionalLight(16777215, 1.05);
+    sun.position.set(1.2, 5.5, 1.8);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    const sc = sun.shadow.camera;
+    sc.left = -2.8;
+    sc.right = 2.8;
+    sc.top = 3.6;
+    sc.bottom = -3.6;
+    sc.near = 0.5;
+    sc.far = 12;
+    sun.shadow.bias = -4e-4;
+    scene.add(sun);
+    const fill = new T3.DirectionalLight(12571903, 0.35);
+    fill.position.set(-2, 2, 4);
+    scene.add(fill);
+    const UP = new T3.Vector3(0, 1, 0), ZAX = new T3.Vector3(0, 0, 1);
+    const V = (a) => new T3.Vector3(a[0], a[1], a[2]);
+    const _v = new T3.Vector3(), _v2 = new T3.Vector3(), _c = new T3.Vector3(), _c2 = new T3.Vector3(), _q = new T3.Quaternion(), _m = new T3.Matrix4();
+    const std = (hex, rough = 0.8) => new T3.MeshStandardMaterial({ color: C(hex), roughness: rough });
+    (function buildArena() {
+      const floor = new T3.Mesh(new T3.PlaneGeometry(26, 22), new T3.MeshStandardMaterial({ color: C(8138539), roughness: 0.95, side: T3.DoubleSide }));
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      scene.add(floor);
+      const bm = std(1385274, 0.9);
+      for (const [w, d, x, z] of [[14, 0.05, 0, -6.2], [14, 0.05, 0, 7], [0.05, 13.2, -7, 0], [0.05, 13.2, 7, 0]]) {
+        const b = new T3.Mesh(new T3.BoxGeometry(w, 0.75, d), bm);
+        b.position.set(x, 0.375, z);
+        scene.add(b);
+      }
+      const top = new T3.Mesh(new T3.BoxGeometry(P.tableW, 0.03, P.tableL), std(1925038, 0.55));
+      top.position.y = P.tableY - 0.015;
+      top.receiveShadow = true;
+      scene.add(top);
+      const lm = new T3.MeshBasicMaterial({ color: C(15922682) });
+      const line = (w, l, x, z) => {
+        const m = new T3.Mesh(new T3.PlaneGeometry(w, l), lm);
+        m.rotation.x = -Math.PI / 2;
+        m.position.set(x, P.tableY + 6e-4, z);
+        scene.add(m);
+      };
+      line(0.02, P.tableL, -P.tableW / 2 + 0.01, 0);
+      line(0.02, P.tableL, P.tableW / 2 - 0.01, 0);
+      line(P.tableW, 0.02, 0, -P.tableL / 2 + 0.01);
+      line(P.tableW, 0.02, 0, P.tableL / 2 - 0.01);
+      line(6e-3, P.tableL, 0, 0);
+      const dm = std(1054239, 0.8);
+      const ap = new T3.Mesh(new T3.BoxGeometry(P.tableW - 0.16, 0.06, P.tableL - 0.3), dm);
+      ap.position.y = P.tableY - 0.06;
+      scene.add(ap);
+      for (const x of [-0.55, 0.55]) for (const z of [-1, 1]) {
+        const leg = new T3.Mesh(new T3.BoxGeometry(0.05, P.tableY - 0.09, 0.05), dm);
+        leg.position.set(x, (P.tableY - 0.09) / 2, z);
+        leg.castShadow = true;
+        scene.add(leg);
+      }
+      const c = document.createElement("canvas");
+      c.width = 512;
+      c.height = 48;
+      const g = c.getContext("2d");
+      g.clearRect(0, 0, 512, 48);
+      g.strokeStyle = "rgba(20,24,30,.9)";
+      g.lineWidth = 1.4;
+      for (let x = 0; x <= 512; x += 6) {
+        g.beginPath();
+        g.moveTo(x, 0);
+        g.lineTo(x, 48);
+        g.stroke();
+      }
+      for (let y = 0; y <= 48; y += 6) {
+        g.beginPath();
+        g.moveTo(0, y);
+        g.lineTo(512, y);
+        g.stroke();
+      }
+      const nt = new T3.CanvasTexture(c);
+      nt.encoding = T3.sRGBEncoding;
+      const net = new T3.Mesh(new T3.PlaneGeometry(P.netHalfW * 2, P.netH), new T3.MeshBasicMaterial({ map: nt, transparent: true, side: T3.DoubleSide, depthWrite: false }));
+      net.position.set(0, P.tableY + P.netH / 2, 0);
+      scene.add(net);
+      const tape = new T3.Mesh(new T3.BoxGeometry(P.netHalfW * 2, 0.014, 5e-3), lm);
+      tape.position.set(0, P.tableY + P.netH - 7e-3, 0);
+      scene.add(tape);
+      for (const x of [-P.netHalfW, P.netHalfW]) {
+        const post = new T3.Mesh(new T3.CylinderGeometry(9e-3, 9e-3, P.netH + 0.02, 10), dm);
+        post.position.set(x, P.tableY + P.netH / 2 - 0.01, 0);
+        scene.add(post);
+      }
+    })();
+    const ballPivot = new T3.Group();
+    scene.add(ballPivot);
+    const markTex = (() => {
+      const c = document.createElement("canvas");
+      c.width = 512;
+      c.height = 256;
+      const g = c.getContext("2d");
+      g.fillStyle = "#f6f3ea";
+      g.fillRect(0, 0, 512, 256);
+      g.fillStyle = "#ff8f1f";
+      g.fillRect(0, 112, 512, 32);
+      g.fillStyle = "#1f6fd6";
+      g.fillRect(0, 0, 512, 30);
+      g.fillStyle = "#d7263d";
+      g.fillRect(0, 226, 512, 30);
+      g.fillStyle = "#12161d";
+      g.fillRect(0, 30, 16, 196);
+      g.fillRect(256, 60, 10, 52);
+      g.font = "bold 34px Arial";
+      g.fillText("\u2605\u2605\u2605 40+", 70, 92);
+      g.beginPath();
+      g.arc(400, 185, 16, 0, 7);
+      g.fill();
+      const t = new T3.CanvasTexture(c);
+      t.encoding = T3.sRGBEncoding;
+      t.anisotropy = 4;
+      return t;
+    })();
+    const matPlain = new T3.MeshStandardMaterial({ color: C(16184298), roughness: 0.55 });
+    const matMark = new T3.MeshStandardMaterial({ map: markTex, roughness: 0.55 });
+    const ballMesh = new T3.Mesh(new T3.SphereGeometry(P.R, 40, 28), matPlain);
+    ballMesh.castShadow = true;
+    ballPivot.add(ballMesh);
+    const ballBlur = new T3.Mesh(new T3.SphereGeometry(P.R * 1.012, 28, 20), new T3.MeshStandardMaterial({ color: C(15985368), roughness: 0.6, transparent: true, opacity: 0 }));
+    ballPivot.add(ballBlur);
+    const spot = new T3.Mesh(new T3.SphereGeometry(45e-4, 14, 10), new T3.MeshBasicMaterial({ color: C(16769357) }));
+    spot.visible = false;
+    scene.add(spot);
+    const racket = new T3.Group();
+    scene.add(racket);
+    (function buildRacket() {
+      const disc = (r, h2, color, z) => {
+        const gm = new T3.CylinderGeometry(r, r, h2, 40);
+        gm.rotateX(Math.PI / 2);
+        const m = new T3.Mesh(gm, std(color, 0.7));
+        m.position.z = z;
+        m.scale.y = 1.05;
+        m.castShadow = true;
+        racket.add(m);
+      };
+      disc(0.0765, 6e-3, 13083501, 0);
+      disc(0.0755, 24e-4, 13111342, 42e-4);
+      disc(0.0755, 24e-4, 1316636, -42e-4);
+      const hm = std(9067051, 0.7);
+      const neck = new T3.Mesh(new T3.BoxGeometry(0.036, 0.03, 0.014), hm);
+      neck.position.y = -0.088;
+      racket.add(neck);
+      const h = new T3.Mesh(new T3.BoxGeometry(0.029, 0.1, 0.023), hm);
+      h.position.y = -0.135;
+      h.castShadow = true;
+      racket.add(h);
+    })();
+    const body = new T3.Group();
+    scene.add(body);
+    const mJersey = std(2923660, 0.85), mShorts = std(1712689, 0.9), mSkin = std(14726287, 0.75), mHair = std(1511951, 0.9), mShoe = std(15330545, 0.7), mEye = std(1709072, 0.5);
+    const addMesh = (geo, mat, parent = body) => {
+      const m = new T3.Mesh(geo, mat);
+      m.castShadow = true;
+      parent.add(m);
+      return m;
+    };
+    const limb = (rb, rt, mat) => {
+      const g = new T3.CylinderGeometry(rt, rb, 1, 16);
+      g.translate(0, 0.5, 0);
+      return addMesh(g, mat);
+    };
+    const ball = (r, mat, parent) => addMesh(new T3.SphereGeometry(r, 18, 14), mat, parent);
+    const setLimb = (m, a, b) => {
+      m.position.copy(a);
+      _v.copy(b).sub(a);
+      const L = _v.length() || 1e-4;
+      m.scale.set(1, L, 1);
+      m.quaternion.setFromUnitVectors(UP, _v.multiplyScalar(1 / L));
+    };
+    const B = {};
+    (function buildBody() {
+      const prof = [[1e-3, -0.06], [0.12, -0.05], [0.168, 0], [0.17, 0.06], [0.15, 0.17], [0.156, 0.27], [0.182, 0.37], [0.176, 0.44], [0.12, 0.49], [0.062, 0.515], [0.055, 0.56]].map((p) => new T3.Vector2(p[0], p[1]));
+      B.torso = addMesh(new T3.LatheGeometry(prof, 28), mJersey);
+      B.torso.scale.z = 0.64;
+      B.shorts = ball(1, mShorts);
+      B.shorts.scale.set(0.176, 0.105, 0.125);
+      B.neck = limb(0.052, 0.046, mSkin);
+      B.head = new T3.Group();
+      body.add(B.head);
+      const skull = ball(0.1, mSkin, B.head);
+      skull.scale.set(0.9, 1.1, 1);
+      const hair = addMesh(new T3.SphereGeometry(0.105, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.56), mHair, B.head);
+      hair.scale.set(0.92, 1.1, 1.02);
+      hair.rotation.x = -0.42;
+      hair.position.y = 6e-3;
+      for (const sx of [-1, 1]) {
+        const e = ball(0.011, mEye, B.head);
+        e.position.set(0.034 * sx, 0.012, 0.089);
+        e.castShadow = false;
+      }
+      const nose = ball(0.012, mSkin, B.head);
+      nose.position.set(0, -0.012, 0.099);
+      for (const k of ["P", "F"]) {
+        B["sh" + k] = ball(0.06, mJersey);
+        B["up" + k] = limb(0.047, 0.04, mSkin);
+        B["sl" + k] = limb(0.06, 0.053, mJersey);
+        B["el" + k] = ball(0.041, mSkin);
+        B["fo" + k] = limb(0.04, 0.03, mSkin);
+        B["hip" + k] = ball(0.088, mShorts);
+        B["th" + k] = limb(0.068, 0.055, mSkin);
+        B["sh2" + k] = limb(0.09, 0.075, mShorts);
+        B["kn" + k] = ball(0.056, mSkin);
+        B["sn" + k] = limb(0.054, 0.038, mSkin);
+        B["shoe" + k] = ball(1, mShoe);
+        B["shoe" + k].scale.set(0.052, 0.05, 0.135);
+      }
+      B.handP = ball(1, mSkin);
+      B.handP.scale.set(0.034, 0.052, 0.03);
+      B.handF = ball(1, mSkin);
+      B.handF.scale.set(0.045, 0.02, 0.055);
+    })();
+    function updateBody(sv, t, rq) {
+      const J = sv.body.at(t);
+      const pelvis = V(J.pelvis), neck = V(J.neck), F = V(J.F);
+      const Y = neck.clone().sub(pelvis);
+      const hgt = Y.length();
+      Y.normalize();
+      const X0 = V(J.shF).sub(V(J.shP));
+      const Z = new T3.Vector3().crossVectors(X0, Y).normalize();
+      if (Z.dot(F) < 0) Z.negate();
+      const X = new T3.Vector3().crossVectors(Y, Z).normalize();
+      _m.makeBasis(X, Y, Z);
+      B.torso.position.copy(pelvis);
+      B.torso.quaternion.setFromRotationMatrix(_m);
+      B.torso.scale.set(1, hgt / 0.53, 0.64);
+      B.shorts.position.copy(pelvis).addScaledVector(Y, 0.01);
+      B.shorts.quaternion.copy(B.torso.quaternion);
+      const head = V(J.head);
+      setLimb(B.neck, neck.clone().addScaledVector(Y, -0.03), head);
+      B.head.position.copy(head);
+      B.head.lookAt(V(J.look));
+      for (const k of ["P", "F"]) {
+        const sh = V(J["sh" + k]), el = V(J["el" + k]), wr = V(J["wr" + k]);
+        B["sh" + k].position.copy(sh);
+        setLimb(B["up" + k], sh, el);
+        setLimb(B["sl" + k], sh, sh.clone().lerp(el, 0.5));
+        B["el" + k].position.copy(el);
+        setLimb(B["fo" + k], el, wr);
+        const hip = V(J["hip" + k]), kn = V(J["kn" + k]), an = V(J["an" + k]);
+        B["hip" + k].position.copy(hip);
+        setLimb(B["th" + k], hip, kn);
+        setLimb(B["sh2" + k], hip, hip.clone().lerp(kn, 0.55));
+        B["kn" + k].position.copy(kn);
+        setLimb(B["sn" + k], kn, an);
+        const shoe = B["shoe" + k];
+        shoe.position.set(an.x + J.F[0] * 0.05, 0.03, an.z + J.F[2] * 0.05);
+        shoe.rotation.set(0, Math.atan2(J.F[0], J.F[2]), 0);
+      }
+      B.handP.position.copy(racket.position).addScaledVector(_v.set(0, 1, 0).applyQuaternion(racket.quaternion), -0.13);
+      B.handP.quaternion.copy(racket.quaternion);
+      B.handF.position.set(J.wrF[0], J.wrF[1] + 0.012, J.wrF[2]);
+      B.handF.rotation.set(0, Math.atan2(J.F[0], J.F[2]), 0);
+    }
+    function makeArrow(color) {
+      const mat = new T3.MeshBasicMaterial({ color: C(color) });
+      const g = new T3.Group();
+      const sg = new T3.CylinderGeometry(1, 1, 1, 14);
+      sg.translate(0, 0.5, 0);
+      const hg = new T3.ConeGeometry(1, 1, 18);
+      hg.translate(0, 0.5, 0);
+      const shaft = new T3.Mesh(sg, mat), head = new T3.Mesh(hg, mat);
+      const gm = new T3.MeshBasicMaterial({ color: C(color), transparent: true, opacity: 0.26, depthTest: false, depthWrite: false });
+      const shaftG = new T3.Mesh(sg, gm), headG = new T3.Mesh(hg, gm);
+      shaftG.renderOrder = headG.renderOrder = 6;
+      g.add(shaft, head, shaftG, headG);
+      g.visible = false;
+      scene.add(g);
+      g.tip = new T3.Vector3();
+      g.put = (o, vec, thick) => {
+        const L = vec.length();
+        if (L < 1e-5) {
+          g.visible = false;
+          return;
+        }
+        g.visible = true;
+        const hl = Math.min(L * 0.42, thick * 6);
+        shaft.scale.set(thick, Math.max(1e-5, L - hl), thick);
+        head.position.y = L - hl;
+        head.scale.set(thick * 2.5, hl, thick * 2.5);
+        shaftG.scale.copy(shaft.scale);
+        headG.position.copy(head.position);
+        headG.scale.copy(head.scale);
+        g.position.copy(o);
+        g.quaternion.setFromUnitVectors(UP, _v2.copy(vec).multiplyScalar(1 / L));
+        g.tip.copy(o).add(vec);
+      };
+      return g;
+    }
+    function makeRing(color) {
+      const mat = new T3.MeshBasicMaterial({ color: C(color) });
+      const g = new T3.Group();
+      g.add(new T3.Mesh(new T3.TorusGeometry(1, 0.03, 8, 72, 5.25), mat));
+      for (const th of [1.1, 3.1, 5.25]) {
+        const c = new T3.Mesh(new T3.ConeGeometry(0.1, 0.3, 14), mat);
+        c.position.set(Math.cos(th), Math.sin(th), 0);
+        c.rotation.z = th;
+        g.add(c);
+      }
+      g.visible = false;
+      scene.add(g);
+      g.put = (center, axis, radius) => {
+        g.visible = true;
+        g.position.copy(center);
+        g.scale.setScalar(radius);
+        g.quaternion.setFromUnitVectors(ZAX, axis);
+      };
+      return g;
+    }
+    const COL = { x: 16736855, y: 3526795, z: 5155327, t: 16054010, n: 15331062, br: 16769357 };
+    const arr = { x: makeArrow(COL.x), y: makeArrow(COL.y), z: makeArrow(COL.z), t: makeArrow(COL.t), n: makeArrow(COL.n), br: makeArrow(COL.br), bu: makeArrow(COL.x), bs: makeArrow(COL.y) };
+    const ring = { x: makeRing(COL.x), y: makeRing(COL.y), z: makeRing(COL.z), t: makeRing(COL.t) };
+    const labelsEl = $("#labels");
+    const mkLabel = (cssColor, cls = "") => {
+      const el = document.createElement("div");
+      el.className = "lbl " + cls;
+      el.style.color = cssColor;
+      el.style.display = "none";
+      labelsEl.appendChild(el);
+      return el;
+    };
+    const lab3 = { x: mkLabel("var(--x)"), y: mkLabel("var(--y)"), z: mkLabel("var(--z)"), t: mkLabel("#f4f6fa"), n: mkLabel("#e9eef6", "sm"), br: mkLabel("#ffe14d", "sm") };
+    const LOFF = { x: [70, 0], y: [0, -34], z: [-70, 0], t: [0, 36], n: [0, -34], br: [-86, 6] };
+    let ballPx = 100;
+    function placeLabel(el, tip, on, key, center) {
+      if (!on) {
+        el.style.display = "none";
+        return;
+      }
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      _v.copy(tip).project(camera);
+      if (_v.z > 1 || _v.z < -1) {
+        el.style.display = "none";
+        return;
+      }
+      let x = (_v.x * 0.5 + 0.5) * w, y = (-_v.y * 0.5 + 0.5) * h;
+      _c.copy(center).project(camera);
+      const cx = (_c.x * 0.5 + 0.5) * w, cy = (-_c.y * 0.5 + 0.5) * h, d = Math.hypot(x - cx, y - cy);
+      const near = key === "n" || key === "br";
+      const radial = near ? d < ballPx + 30 : ballPx < 56;
+      if (radial || d < 1) {
+        const k = near ? Math.max(1, (ballPx + 24) / 34) : 1;
+        x = cx + LOFF[key][0] * (key === "br" ? Math.max(1, k * 0.7) : 1);
+        y = cy + LOFF[key][1] * (key === "n" ? k : 1);
+      } else {
+        x += (x - cx) / d * 16;
+        y += (y - cy) / d * 16;
+      }
+      const wide = w > 1020;
+      x = clamp(x, (wide ? 296 : 0) + 64, w - (wide ? 310 : 0) - 64);
+      y = clamp(y, 112, h - 150);
+      el.style.display = "block";
+      el.style.left = x.toFixed(1) + "px";
+      el.style.top = y.toFixed(1) + "px";
+    }
+    const TR_MAX = 900;
+    const trailGeo = new T3.BufferGeometry();
+    trailGeo.setAttribute("position", new T3.BufferAttribute(new Float32Array(TR_MAX * 3), 3));
+    const trail = new T3.Line(trailGeo, new T3.LineBasicMaterial({ color: C(16757596), transparent: true, opacity: 0.9 }));
+    trail.frustumCulled = false;
+    scene.add(trail);
+    let trailT = [], trailN = 0;
+    const pathGeo = new T3.BufferGeometry();
+    pathGeo.setAttribute("position", new T3.BufferAttribute(new Float32Array(120 * 3), 3));
+    const swingPath = new T3.Line(pathGeo, new T3.LineBasicMaterial({ color: 16777215, transparent: true, opacity: 0.45 }));
+    swingPath.frustumCulled = false;
+    scene.add(swingPath);
+    const marks = [];
+    for (let i = 0; i < 4; i++) {
+      const m = new T3.Mesh(new T3.RingGeometry(0.02, 0.031, 28), new T3.MeshBasicMaterial({ color: C(16757596), side: T3.DoubleSide, transparent: true, opacity: 0.95 }));
+      m.rotation.x = -Math.PI / 2;
+      m.visible = false;
+      scene.add(m);
+      marks.push(m);
+    }
+    function prepServeVisuals(sv) {
+      const pa = trailGeo.attributes.position.array;
+      trailT = [];
+      trailN = 0;
+      if (sv.col && sv.sim.S) {
+        const Sm = sv.sim.S, stepN = Math.max(1, Math.ceil(Sm.n / TR_MAX));
+        for (let i = 0; i < Sm.n && trailN < TR_MAX; i += stepN) {
+          pa[trailN * 3] = Sm.p[i * 3];
+          pa[trailN * 3 + 1] = Sm.p[i * 3 + 1];
+          pa[trailN * 3 + 2] = Sm.p[i * 3 + 2];
+          trailT.push(i * Sm.dt);
+          trailN++;
+        }
+      }
+      trailGeo.attributes.position.needsUpdate = true;
+      const pp = pathGeo.attributes.position.array;
+      const t0 = -sv.swing.T1, t1 = sv.swing.tDone;
+      for (let i = 0; i < 120; i++) {
+        const b = sv.racketAt(t0 + (t1 - t0) * i / 119).b;
+        pp[i * 3] = b[0];
+        pp[i * 3 + 1] = b[1];
+        pp[i * 3 + 2] = b[2];
+      }
+      pathGeo.attributes.position.needsUpdate = true;
+      const bs = sv.events.filter((e) => e.type === "bounce");
+      marks.forEach((m, i) => {
+        if (bs[i]) {
+          m.position.set(bs[i].p[0], P.tableY + 12e-4, bs[i].p[2]);
+          m.userData.t = bs[i].t;
+        } else m.userData.t = Infinity;
+      });
+    }
+    const EYE = new T3.Vector3(0, 1.36, 2.9);
+    let camAnim = null;
+    controls.addEventListener("start", () => {
+      camAnim = null;
+    });
+    function flyTo(pos, tgt, dur = 0.55) {
+      camAnim = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: tgt, u: 0, dur };
+    }
+    const ballPos = new T3.Vector3(), prevBall = new T3.Vector3();
+    function setView(name, instant) {
+      S.view = name;
+      const sv = S.serve;
+      const pc = sv ? V(sv.pc) : new T3.Vector3(0.35, 0.92, -1.5);
+      const toEye = EYE.clone().sub(pc).normalize();
+      let pos, tgt;
+      if (name === "recv") {
+        const ax = camera.aspect < 1 && sv ? clamp((pc.x + (sv.body ? sv.body.layout.P[0] : pc.x)) / 2, -0.8, 0.8) : 0;
+        pos = EYE.clone();
+        tgt = new T3.Vector3(ax, 0.95, -1.2);
+      } else if (name === "close") {
+        const bx = sv && sv.body ? sv.body.layout.P[0] - pc.x : 0;
+        tgt = pc.clone().add(new T3.Vector3(bx * 0.35, 0.2, 0));
+        pos = tgt.clone().addScaledVector(toEye, 1.95);
+        pos.y += 0.05;
+      } else if (name === "contact") {
+        const nn = sv ? V(sv.n) : new T3.Vector3(0, 0, 1);
+        const bb = sv && sv.an && sv.an.brush ? V(sv.an.brush) : null;
+        if (bb && bb.length() > 0.2) bb.normalize();
+        const bd = sv && sv.body ? new T3.Vector3(sv.body.layout.P[0] - pc.x, 0, sv.body.layout.P[2] - pc.z).normalize() : null;
+        const eh = new T3.Vector3(toEye.x, 0, toEye.z).normalize();
+        let best = null;
+        for (let az = -70; az <= 70; az += 14) for (const el of [0.04, 0.22, 0.45, 0.75]) {
+          const d = eh.clone().applyAxisAngle(UP, az * DEG3);
+          d.y = el;
+          d.normalize();
+          let score = Math.max(Math.abs(d.dot(nn)), bb && bb.lengthSq() > 0.5 ? Math.abs(d.dot(bb)) : 0) + 4e-3 * Math.abs(az) + 0.15 * el;
+          if (bd && d.dot(bd) > 0.35) score += 1;
+          if (!best || score < best.score) best = { d, score };
+        }
+        tgt = pc.clone();
+        pos = pc.clone().addScaledVector(best.d, 0.95);
+        if (pos.y < P.tableY + 0.16) pos.y = P.tableY + 0.16;
+      } else if (name === "side") {
+        const sgn = sv && sv.body ? Math.sign(sv.body.layout.P[0] - pc.x) || 1 : 1;
+        pos = new T3.Vector3(-5.6 * sgn, 1.5, -0.2);
+        tgt = new T3.Vector3(0, 0.9, -0.2);
+      } else if (name === "top") {
+        tgt = new T3.Vector3(0, 0.76, -0.4);
+        pos = new T3.Vector3(0, 8.9, -0.38);
+      } else {
+        _v.copy(EYE).sub(ballPos);
+        _v.y = Math.max(_v.y, 0.12);
+        _v.normalize();
+        pos = ballPos.clone().addScaledVector(_v, 0.3);
+        tgt = ballPos.clone();
+      }
+      if (instant) {
+        camera.position.copy(pos);
+        controls.target.copy(tgt);
+        camAnim = null;
+      } else flyTo(pos, tgt);
+      $$("#views button").forEach((b) => b.classList.toggle("on", b.dataset.view === name));
+    }
+    function inset() {
+      const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
+      const wide = w > 1020;
+      const L = wide ? 296 : 0, R = wide ? 310 : 0, T = wide ? 104 : 92;
+      const Bm = wide ? 128 : Math.max(96, h - $("#dock").getBoundingClientRect().top + 8);
+      camera.setViewOffset(w, h, -(L - R) / 2, (Bm - T) / 2, w, h);
+      camera.updateProjectionMatrix();
+    }
+    function resize() {
+      const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.fov = clamp(36 * 1.55 / camera.aspect, 36, 50);
+      inset();
+    }
+    window.addEventListener("resize", resize);
+    if (window.ResizeObserver) new ResizeObserver(resize).observe($("#app"));
+    const qShow = new T3.Quaternion();
+    const reviewing = () => S.mode === "lab" || S.phase === "review";
+    function axesFor(b) {
+      if (Math.hypot(b.v[0], b.v[2]) > 0.15) {
+        const sp = spinParts(b.w, b.v);
+        return { ax: [sp.h, [0, 1, 0], sp.f], c: [sp.top, sp.side, sp.cork] };
+      }
+      return { ax: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], c: [b.w[0], b.w[1], b.w[2]] };
+    }
+    function apply(dt) {
+      const sv = S.serve, t = S.t;
+      const b = sv.ballAt(t);
+      const rv = reviewing();
+      let hideBall = false;
+      if (!rv) {
+        if (S.set.watch === "racket" && t > 0.03) hideBall = true;
+        if (S.phase === "ask" && !S.playing) hideBall = true;
+      }
+      ballPos.set(b.p[0], b.p[1], b.p[2]);
+      ballPivot.position.copy(ballPos);
+      ballPivot.visible = !hideBall;
+      ballMesh.material = rv ? matMark : matPlain;
+      const rd = P.R;
+      const wl = Math.hypot(b.w[0], b.w[1], b.w[2]);
+      const A = axesFor(b);
+      if (S.playing || S.lastT !== t || !S.spinView) qShow.set(b.q[0], b.q[1], b.q[2], b.q[3]);
+      let blur = 0;
+      if (!S.playing && S.spinView && rv) {
+        let wd = b.w;
+        if (S.iso !== "all") {
+          const i = "xyz".indexOf(S.iso);
+          wd = [A.ax[i][0] * A.c[i], A.ax[i][1] * A.c[i], A.ax[i][2] * A.c[i]];
+        }
+        const m = Math.hypot(wd[0], wd[1], wd[2]);
+        const slow = Math.pow(S.spinRate, 2.2) * 0.12;
+        if (m > 1e-6 && slow > 0) {
+          _q.setFromAxisAngle(_v.set(wd[0] / m, wd[1] / m, wd[2] / m), m * dt * slow);
+          qShow.premultiply(_q);
+        }
+      } else if (S.playing && rv) blur = clamp((wl * dt * S.rate - 0.7) / 1.3, 0, 0.82);
+      ballMesh.quaternion.copy(qShow);
+      ballBlur.material.opacity = blur;
+      ballBlur.visible = blur > 0.01;
+      S.lastT = t;
+      const pz = sv.racketAt(t);
+      const face = TYPES[sv.type].face;
+      const zw = qRot(pz.q, [0, 0, face]);
+      racket.quaternion.set(pz.q[0], pz.q[1], pz.q[2], pz.q[3]);
+      racket.position.set(pz.b[0] - zw[0] * 55e-4, pz.b[1] - zw[1] * 55e-4, pz.b[2] - zw[2] * 55e-4);
+      body.visible = !!sv.body;
+      if (sv.body) updateBody(sv, t, pz.q);
+      const showTr = rv && S.trail && trailN > 1;
+      const whole = S.mode === "lab" && !S.playing && t <= 2e-3;
+      trail.visible = showTr;
+      if (showTr) {
+        let n = 0;
+        if (whole) n = trailN;
+        else {
+          while (n < trailN && trailT[n] <= t) n++;
+        }
+        trailGeo.setDrawRange(0, n);
+      }
+      marks.forEach((m) => {
+        m.visible = rv && S.trail && !S.spinView && (t >= m.userData.t || whole && isFinite(m.userData.t));
+      });
+      const hit = rv && S.aids && sv.col && !S.spinView && t > -0.02 && t < 0.045;
+      swingPath.visible = rv && S.aids && !S.spinView;
+      const bc = _c2.set(sv.pc[0] - sv.n[0] * P.R, sv.pc[1] - sv.n[1] * P.R, sv.pc[2] - sv.n[2] * P.R);
+      if (hit) {
+        const o = bc.clone(), k = 0.026, an = sv.an;
+        arr.n.put(o, V(sv.n).multiplyScalar(0.11), 3e-3);
+        const br = V(an.brush), up = V(an.uf).multiplyScalar(an.relAlong), sd = br.clone().sub(up);
+        arr.br.put(o, br.clone().multiplyScalar(k), 42e-4);
+        const bl = br.length();
+        if (Math.abs(an.relAlong) > 0.1 * bl && sd.length() > 0.1 * bl) {
+          arr.bu.put(o, up.multiplyScalar(k), 26e-4);
+          arr.bs.put(o, sd.multiplyScalar(k), 26e-4);
+        } else arr.bu.visible = arr.bs.visible = false;
+        spot.visible = true;
+        spot.position.copy(o);
+        lab3.n.textContent = "\u62CD\u9762\u671D\u5411";
+        lab3.br.textContent = "\u62CD\u5B50\u8E6D\u7403\u7684\u65B9\u5411";
+      } else {
+        arr.n.visible = arr.br.visible = arr.bu.visible = arr.bs.visible = false;
+        spot.visible = false;
+      }
+      placeLabel(lab3.n, arr.n.tip, hit && arr.n.visible, "n", bc);
+      placeLabel(lab3.br, arr.br.tip, hit && arr.br.visible, "br", bc);
+      ballPx = rd / Math.max(0.05, camera.position.distanceTo(ballPos)) * (canvas.clientHeight / (2 * Math.tan(camera.fov * DEG3 / 2)));
+      const spinOn = rv && S.aids && wl > 2 && t >= 0 && ballPivot.visible;
+      const comps = spinOn && (S.spinView || t >= 0.045);
+      const ref = Math.max(wl, 15 * RPS);
+      for (const key of ["x", "y", "z"]) {
+        const i = "xyz".indexOf(key), c = A.c[i], on = comps && Math.abs(c) > 0.04 * ref && (S.iso === "all" || S.iso === key);
+        if (on) {
+          const dir = _v.set(A.ax[i][0], A.ax[i][1], A.ax[i][2]).multiplyScalar(Math.sign(c)).clone();
+          arr[key].put(ballPos.clone().addScaledVector(dir, rd * 1.04), dir.clone().multiplyScalar(rd * 2 * Math.abs(c) / ref), rd * 0.065);
+          if (S.iso === key) ring[key].put(ballPos, dir, rd * 1.24);
+          else ring[key].visible = false;
+          lab3[key].innerHTML = `${key.toUpperCase()} ${compName(i, c)} <b>${Math.abs(c / RPS).toFixed(0)}</b>`;
+        } else {
+          arr[key].visible = false;
+          ring[key].visible = false;
+        }
+        placeLabel(lab3[key], arr[key].tip, on, key, ballPos);
+      }
+      const totOn = spinOn && S.iso === "all";
+      if (totOn) {
+        const dir = new T3.Vector3(b.w[0] / wl, b.w[1] / wl, b.w[2] / wl);
+        ring.t.put(ballPos, dir, rd * 1.24);
+        if (comps) {
+          arr.t.put(ballPos.clone().addScaledVector(dir, rd * 1.04), dir.clone().multiplyScalar(rd * 2.3 * wl / ref), rd * 0.045);
+          lab3.t.innerHTML = `\u8F6C\u8F74 <b>${(wl / RPS).toFixed(0)}</b> \u8F6C/\u79D2`;
+        } else {
+          arr.t.visible = false;
+        }
+      } else {
+        arr.t.visible = false;
+        ring.t.visible = false;
+      }
+      placeLabel(lab3.t, arr.t.tip, totOn && comps, "t", ballPos);
+      updateReadout(b, A, wl);
+    }
+    function compName(i, c) {
+      if (i === 0) return c > 0 ? "\u4E0A\u65CB" : "\u4E0B\u65CB";
+      if (i === 1) return "\u4FA7\u65CB";
+      return "\u87BA\u65CB";
+    }
+    let lastReadKey = "";
+    function updateReadout(b, A, wl) {
+      const sv = S.serve;
+      const key = `${S.t.toFixed(3)}|${sv.id}`;
+      if (key === lastReadKey) return;
+      lastReadKey = key;
+      const set = (id, c, pos, neg) => {
+        const r = c / RPS;
+        $("#val" + id).innerHTML = S.t < 0 ? "\u2014" : `${Math.abs(r).toFixed(1)}<small>\u8F6C/\u79D2</small>`;
+        const w = clamp(Math.abs(r) / 60, 0, 1) * 50;
+        const el = $("#bar" + id);
+        el.style.width = (S.t < 0 ? 0 : w) + "%";
+        el.style.left = r >= 0 ? "50%" : 50 - w + "%";
+        $("#desc" + id).textContent = S.t < 0 ? "\u8FD8\u6CA1\u89E6\u7403" : Math.abs(r) < 0.5 ? "\u51E0\u4E4E\u6CA1\u6709" : r > 0 ? pos : neg;
+      };
+      set("X", A.c[0], "\u4E0A\u65CB\uFF1A\u78B0\u4F60\u7684\u62CD\u5B50\u5F80\u4E0A\u8E66", "\u4E0B\u65CB\uFF1A\u78B0\u4F60\u7684\u62CD\u5B50\u5F80\u4E0B\u6389");
+      set("Y", A.c[1], "\u4FA7\u65CB\uFF1A\u78B0\u4F60\u7684\u62CD\u5B50\u5F80\u4F60\u5DE6\u8FB9\u8E66", "\u4FA7\u65CB\uFF1A\u78B0\u4F60\u7684\u62CD\u5B50\u5F80\u4F60\u53F3\u8FB9\u8E66");
+      set("Z", A.c[2], "\u87BA\u65CB\uFF1A\u843D\u53F0\u540E\u5F80\u4F60\u5DE6\u8FB9\u62D0", "\u87BA\u65CB\uFF1A\u843D\u53F0\u540E\u5F80\u4F60\u53F3\u8FB9\u62D0");
+      $("#valT").textContent = S.t < 0 ? "\u2014" : (wl / RPS).toFixed(1);
+      let st = "\u89E6\u7403\u524D";
+      if (S.t >= 0) {
+        st = "\u521A\u79BB\u62CD";
+        for (const e of sv.events) if (e.type === "bounce" && S.t >= e.t) st = e.side === "own" ? "\u7B2C\u4E00\u8DF3\u540E" : "\u5230\u4F60\u9762\u524D";
+      }
+      $("#stageName").textContent = st;
+    }
+    const dirWord = (v) => {
+      const l = Math.hypot(v[0], v[1], v[2]) || 1, x = v[0] / l, y = v[1] / l, z = v[2] / l;
+      const out = [];
+      if (Math.abs(x) > 0.33) out.push(x > 0 ? "\u5F80\u4F60\u7684\u53F3\u8FB9" : "\u5F80\u4F60\u7684\u5DE6\u8FB9");
+      if (Math.abs(y) > 0.33) out.push(y > 0 ? "\u5F80\u4E0A" : "\u5F80\u4E0B");
+      if (Math.abs(z) > 0.33) out.push(z > 0 ? "\u671D\u4F60\u8FD9\u8FB9" : "\u5F80\u4ED6\u81EA\u5DF1\u90A3\u8FB9");
+      return out.join("\u3001") || "\u51E0\u4E4E\u6CA1\u52A8";
+    };
+    function explainHtml(sv) {
+      if (!sv.col) return "<li><b>\u6CA1\u78B0\u5230\u7403</b>\u62CD\u9762\u662F\u80CC\u7740\u7403\u8D70\u7684\uFF0C\u62CD\u5B50\u548C\u7403\u9519\u5F00\u4E86\u3002</li>";
+      const a = sv.an, out = [];
+      const o = a.openDeg;
+      let face = o >= 75 ? "\u51E0\u4E4E\u653E\u5E73\uFF0C\u62CD\u9762\u671D\u5929" : o >= 45 ? "\u540E\u4EF0\u5F97\u5F88\u591A" : o >= 20 ? "\u660E\u663E\u540E\u4EF0" : o >= 6 ? "\u7A0D\u5FAE\u540E\u4EF0\uFF0C\u63A5\u8FD1\u7ACB\u7740" : o > -6 ? "\u7ACB\u7740" : "\u538B\u7740\u62CD";
+      face += `\uFF08${o >= 0 ? "\u540E\u4EF0" : "\u524D\u503E"} ${Math.abs(o).toFixed(0)}\xB0\uFF09`;
+      if (Math.abs(a.yawDeg) >= 12 && o < 75) face += `\uFF0C\u62CD\u9762\u504F\u5411\u4F60\u7684${a.yawDeg > 0 ? "\u53F3" : "\u5DE6"}\u8FB9`;
+      out.push(`<li><b>\u62CD\u9762</b>${face}\u3002</li>`);
+      const u = a.spotUp;
+      let sp = u < -0.87 ? "\u7403\u7684\u5E95\u90E8" : u < -0.5 ? "\u7403\u7684\u540E\u4E0B\u65B9" : u < -0.17 ? "\u7403\u7684\u540E\u9762\u504F\u4E0B" : u < 0.17 ? "\u7403\u7684\u6B63\u540E\u9762" : "\u7403\u7684\u540E\u4E0A\u65B9";
+      if (a.spotSide > 0.25) sp += "\u3001\u504F\u4F60\u7684\u53F3\u624B\u8FB9";
+      else if (a.spotSide < -0.25) sp += "\u3001\u504F\u4F60\u7684\u5DE6\u624B\u8FB9";
+      out.push(`<li><b>\u78B0\u5230\u54EA\u513F</b>\u62CD\u5B50\u8D34\u5728${sp}\u3002</li>`);
+      const bs = Math.hypot(a.brush[0], a.brush[1], a.brush[2]);
+      out.push(`<li><b>\u600E\u4E48\u8E6D\u7684</b>\u62CD\u5B50\u8D34\u7740\u7403${dirWord(a.brush)}\u8E6D\u8FC7\u53BB\uFF0C${bs.toFixed(1)} m/s\uFF08<span class="cb">\u9EC4\u7BAD\u5934</span>\uFF09\u3002</li>`);
+      const L = sv.launch, tp = L.top / RPS, sd = L.side / RPS, ck = L.cork / RPS;
+      const va = a.relAlong, vs = Math.sqrt(Math.max(0, bs * bs - va * va));
+      const flatFace = o >= 55;
+      const split = Math.abs(va) > 0.1 * bs && vs > 0.1 * bs;
+      const red = split ? '\uFF08<span class="cx">\u7EA2\u7BAD\u5934</span>\uFF09' : "", green = split ? '\uFF08<span class="cy">\u7EFF\u7BAD\u5934</span>\uFF09' : "";
+      let upTxt;
+      if (Math.abs(tp) < 6) upTxt = `\u987A\u7740\u62CD\u9762\u4E0A\u4E0B\u7684\u90A3\u4EFD\u53EA\u6709 ${Math.abs(va).toFixed(1)} m/s\uFF0C\u51E0\u4E4E\u6CA1\u8E6D\u5230\uFF0C\u6240\u4EE5\u79BB\u62CD\u65F6<span class="cx">${Math.abs(tp) < 1.5 ? "\u6CA1\u6709\u4E0A\u4E0B\u65CB" : `\u53EA\u6709\u4E00\u70B9${tp > 0 ? "\u4E0A" : "\u4E0B"}\u65CB\uFF08${Math.abs(tp).toFixed(0)}\uFF09`}</span>`;
+      else if (tp > 0) upTxt = `\u987A\u7740\u62CD\u9762<b class="in">\u5F80\u4E0A</b>\u7684\u90A3\u4EFD ${va.toFixed(1)} m/s${red}\u8E6D\u51FA<span class="cx">\u4E0A\u65CB ${tp.toFixed(0)}</span>`;
+      else upTxt = `\u987A\u7740\u62CD\u9762<b class="in">\u5F80\u4E0B</b>\u7684\u90A3\u4EFD ${Math.abs(va).toFixed(1)} m/s${red}\u8E6D\u51FA<span class="cx">\u4E0B\u65CB ${Math.abs(tp).toFixed(0)}</span>${flatFace ? '\u3002\u62CD\u9762\u8FD9\u4E48\u5E73\uFF0C"\u5F80\u4E0B"\u770B\u4E0A\u53BB\u5C31\u662F\u671D\u4F60\u8FD9\u8FB9\u9001' : ""}`;
+      if (a.racketAlong < -0.3 && va > 0.3 && tp >= 6) upTxt += "\u3002\u62CD\u5B50\u81EA\u5DF1\u662F\u5F80\u4E0B\u8D70\u7684\uFF0C\u4F46\u7403\u843D\u5F97\u66F4\u5FEB\uFF0C\u76F8\u5BF9\u7403\u6765\u8BF4\u62CD\u5B50\u5728\u5F80\u4E0A\u8E6D";
+      let sideTxt = "";
+      if (Math.abs(sd) >= 3 || Math.abs(ck) >= 6) {
+        sideTxt = `\uFF1B\u6A2A\u7740\u7684\u90A3\u4EFD ${vs.toFixed(1)} m/s${green}\u8E6D\u51FA<span class="cy">\u4FA7\u65CB ${Math.abs(sd).toFixed(0)}</span>`;
+        if (Math.abs(ck) >= 6) sideTxt += `\uFF0C\u62CD\u9762\u4E0D\u662F\u7ACB\u7740\u7684\uFF0C\u6240\u4EE5\u5176\u4E2D\u4E00\u90E8\u5206\u6210\u4E86<span class="cz">\u87BA\u65CB ${Math.abs(ck).toFixed(0)}</span>`;
+      }
+      out.push(`<li><b>\u62C6\u5F00\u770B</b>${upTxt}${sideTxt}\u3002\uFF08\u5355\u4F4D\uFF1A\u8F6C/\u79D2\uFF09</li>`);
+      if (sv.arrive) {
+        const R = sv.arrive.top / RPS, d = R - tp;
+        const res = Math.abs(R) < TH_RPS ? "\u51E0\u4E4E\u6CA1\u6709\u4E0A\u4E0B\u65CB" : (R > 0 ? "\u4E0A\u65CB " : "\u4E0B\u65CB ") + Math.abs(R).toFixed(0);
+        const tbl = d > 1 ? `\u6BCF\u6B21\u843D\u53F0\u90FD\u88AB\u53F0\u9762\u5F80\u4E0A\u65CB\u65B9\u5411\u5E26\u4E00\u70B9\uFF08\u8FD9\u7403\u4E00\u5171 ${d.toFixed(0)}\uFF09` : d < -1 ? `\u4E0A\u65CB\u592A\u5F3A\uFF0C\u843D\u53F0\u65F6\u53CD\u88AB\u53F0\u9762\u78E8\u6389 ${(-d).toFixed(0)}` : "\u8FD9\u7403\u843D\u53F0\u51E0\u4E4E\u6CA1\u6539\u53D8\u4E0A\u4E0B\u65CB";
+        out.push(`<li><b>\u5230\u4F60\u9762\u524D</b>\u7403\u5728\u4ED6\u90A3\u8FB9\u843D\u4E00\u6B21\u3001\u4F60\u8FD9\u8FB9\u843D\u4E00\u6B21\uFF0C${tbl}\uFF0C\u5230\u4F60\u9762\u524D\u662F<em class="${R >= TH_RPS ? "up" : R <= -TH_RPS ? "dn" : ""}">${res}</em>\u3002${sv.fake ? "\u89E6\u7403\u4E4B\u540E\u53CD\u7740\u6536\u62CD\u7684\u90A3\u4E00\u4E0B\u662F\u5047\u52A8\u4F5C\uFF0C\u4E0D\u7B97\u6570\u3002" : ""}</li>`);
+      } else out.push(`<li><b>\u8FD9\u7403</b>${sv.verdict.why}\u3002</li>`);
+      return out.join("");
+    }
+    let serveId = 0;
+    function adopt(sv) {
+      sv.id = ++serveId;
+      S.serve = sv;
+      lastReadKey = "";
+      prepServeVisuals(sv);
+      $("#explain").innerHTML = explainHtml(sv);
+    }
+    function makeServe() {
+      const s = S.set;
+      const types = TYPE_KEYS.filter((k) => s.types[k]);
+      const ps = [-1, 0, 1].filter((_, i) => s.pos[i]), ls = ["short", "long"].filter((_, i) => s.len[i]);
+      for (let k = 0; k < 10; k++) {
+        const r = Math.random();
+        const intent = s.choices === 3 ? r < 0.4 ? "top" : r < 0.8 ? "back" : "flat" : r < 0.5 ? "top" : "back";
+        const cfg = {
+          type: pick(types.length ? types : TYPE_KEYS),
+          hand: s.hand,
+          intent,
+          pos: pick(ps.length ? ps : [-1, 0, 1]),
+          len: pick(ls.length ? ls : ["short", "long"]),
+          style: s.style === "random" ? void 0 : s.style,
+          fake: s.fake === "all" || s.fake === "some" && Math.random() < 0.45
+        };
+        const sv = generateServe(cfg);
+        if (sv) {
+          sv.cfg = cfg;
+          return sv;
+        }
+      }
+      return null;
+    }
+    function nextServe() {
+      const sv = makeServe();
+      if (!sv) {
+        S.serve = null;
+        renderStage();
+        return false;
+      }
+      adopt(sv);
+      S.dirty = false;
+      S.phase = "ready";
+      S.answer = null;
+      S.t = sv.tStart;
+      S.playing = false;
+      S.stopAt = null;
+      S.iso = "all";
+      S.spinView = false;
+      backToHome(true);
+      syncUI();
+      renderStage();
+      return true;
+    }
+    function backToHome(newServe) {
+      const special = S.view === "ball" || S.view === "contact";
+      const v = special ? S.home : S.view;
+      if (special || newServe && (v === "close" || v === "side" || v === "recv" && camera.aspect < 1)) setView(v);
+    }
+    function playServe() {
+      if (S.dirty || !S.serve) {
+        if (!nextServe()) return;
+      }
+      const sv = S.serve;
+      S.phase = "play";
+      S.t = sv.tStart + 0.25;
+      S.rate = S.set.speed;
+      S.playing = true;
+      S.stopAt = null;
+      S.live = null;
+      S.answer = null;
+      S.spinView = false;
+      backToHome(false);
+      syncUI();
+      renderStage();
+    }
+    function onPlayEnd() {
+      if (S.mode === "practice" && S.phase === "play") {
+        S.phase = "ask";
+        renderStage();
+      }
+      syncTransport();
+    }
+    function showContact(replay) {
+      const sv = S.serve;
+      if (!sv) return;
+      S.spinView = false;
+      S.iso = "all";
+      setView("contact");
+      if (replay) {
+        S.t = -0.22;
+        S.rate = 0.1;
+        S.playing = true;
+        S.stopAt = 0;
+      } else {
+        S.t = 0;
+        S.playing = false;
+        S.stopAt = null;
+      }
+      syncUI();
+    }
+    function showSpin(at) {
+      const sv = S.serve;
+      if (!sv) return;
+      S.playing = false;
+      S.stopAt = null;
+      if (at !== void 0) S.t = Math.min(sv.tEnd, at);
+      else if (sv.arrive) S.t = Math.min(sv.tEnd, sv.arrive.t + 0.05);
+      else if (S.t < 0.05) S.t = Math.min(sv.tEnd, 0.08);
+      S.spinView = true;
+      const b = sv.ballAt(S.t);
+      ballPos.set(b.p[0], b.p[1], b.p[2]);
+      setView("ball");
+      syncUI();
+    }
+    function answer(a) {
+      const sv = S.serve;
+      if (!sv || S.answer || S.phase !== "play" && S.phase !== "ask" || S.t < 0) return;
+      S.answer = a;
+      S.phase = "review";
+      renderStage();
+      showContact(true);
+    }
+    function describe(sv) {
+      const c = sv.cfg || {};
+      return `${TYPES[sv.type].short}${sv.hand < 0 ? "\uFF08\u5DE6\u624B\uFF09" : ""} \xB7 ${c.len === "short" ? "\u8FD1" : "\u8FDC"}${sv.fake ? " \xB7 \u6709\u5047\u52A8\u4F5C" : ""}`;
+    }
+    function brief(sv) {
+      const o = sv.an.openDeg, tp = sv.launch.top / RPS;
+      const face = o >= 6 ? `\u62CD\u9762\u540E\u4EF0 ${o.toFixed(0)}\xB0` : o > -6 ? "\u62CD\u9762\u7ACB\u7740" : `\u62CD\u9762\u524D\u503E ${(-o).toFixed(0)}\xB0`;
+      if (Math.abs(tp) < 6) return `${face}\uFF0C\u4E0A\u4E0B\u65B9\u5411\u51E0\u4E4E\u6CA1\u8E6D${sv.cls === "top" ? "\uFF0C\u843D\u53F0\u540E\u624D\u5E26\u4E0A\u4E0A\u65CB" : ""}`;
+      return `${face}\uFF0C\u987A\u7740\u62CD\u9762\u5F80${tp > 0 ? "\u4E0A" : "\u4E0B"}\u8E6D`;
+    }
+    function renderStage() {
+      renderStageInner();
+      inset();
+    }
+    function renderStageInner() {
+      const st = $("#stage"), sv = S.serve;
+      if (S.mode === "lab") {
+        st.innerHTML = `<div class="row"><button type="button" class="btn primary" data-act="labplay">\u64AD\u653E\u8FD9\u4E00\u7403</button><button type="button" class="btn" data-act="contact">\u770B\u89E6\u7403\u77AC\u95F4</button><button type="button" class="btn" data-act="spin">\u770B\u7403\u600E\u4E48\u8F6C</button><p class="hint" style="flex:1">\u62D6\u5DE6\u8FB9\u7684\u6ED1\u6746\uFF0C\u7403\u8DEF\u548C\u53F3\u8FB9\u7684\u8BB2\u89E3\u4F1A\u8DDF\u7740\u91CD\u7B97\u3002</p></div>`;
+        return;
+      }
+      if (!sv) {
+        st.innerHTML = '<p class="hint">\u8FD9\u7EC4\u8BBE\u7F6E\u4E0B\u6CA1\u7B97\u51FA\u80FD\u4E0A\u53F0\u7684\u53D1\u7403\uFF0C\u6362\u4E2A\u8BBE\u7F6E\u518D\u8BD5\u3002</p>';
+        return;
+      }
+      if (S.phase === "ready") {
+        st.innerHTML = `<div class="row"><button type="button" class="btn primary" data-act="serve">\u53D1\u7403<kbd>\u7A7A\u683C</kbd></button>
+        <p class="hint" style="flex:1">\u76EF\u4F4F\u89E6\u7403\u90A3\u4E00\u4E0B\u7684\u62CD\u578B\uFF1A\u62CD\u9762\u4EF0\u591A\u5C11\uFF0C\u62CD\u5B50\u8D34\u7740\u7403\u662F\u5F80\u4E0A\u8E6D\u8FD8\u662F\u5F80\u4E0B\u8E6D\u3002</p></div>`;
+      } else if (S.phase === "play" || S.phase === "ask") {
+        const three = S.set.choices === 3;
+        st.innerHTML = `<div class="row"><div class="answers">
+          <button type="button" class="ans up" data-ans="top" disabled><b>\u4FA7\u4E0A</b><small>\u952E\u76D8 \u2191</small></button>
+          ${three ? '<button type="button" class="ans" data-ans="flat" disabled><b>\u4E0D\u8F6C</b><small>\u952E\u76D8 \u2192</small></button>' : ""}
+          <button type="button" class="ans down" data-ans="back" disabled><b>\u4FA7\u4E0B</b><small>\u952E\u76D8 \u2193</small></button>
+        </div><button type="button" class="btn" data-act="again">\u518D\u770B\u4E00\u904D</button></div>`;
+        S.live = null;
+      } else if (S.phase === "review") {
+        const ok = S.answer === sv.cls;
+        st.innerHTML = `<div class="row"><div class="verdict ${ok ? "ok" : "no"}"><b>${ok ? "\u5BF9\u4E86" : "\u770B\u9519\u4E86"}\uFF0C\u662F${CLS[sv.cls]}</b><span>${brief(sv)}<i>${describe(sv)}</i></span></div>
+        <button type="button" class="btn" data-act="contact">\u518D\u770B\u89E6\u7403</button><button type="button" class="btn" data-act="spin">\u770B\u7403\u600E\u4E48\u8F6C</button><button type="button" class="btn primary" data-act="next">\u4E0B\u4E00\u7403<kbd>\u7A7A\u683C</kbd></button></div>`;
+      }
+    }
+    $("#stage").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b || b.disabled) return;
+      if (b.dataset.ans) return answer(b.dataset.ans);
+      const act = b.dataset.act;
+      if (act === "serve") playServe();
+      else if (act === "again") {
+        const sv = S.serve;
+        S.phase = "play";
+        S.t = sv.tStart + 0.25;
+        S.rate = S.set.speed;
+        S.playing = true;
+        S.stopAt = null;
+        S.live = null;
+        backToHome(false);
+        renderStage();
+      } else if (act === "next") {
+        S.dirty = true;
+        playServe();
+      } else if (act === "contact") showContact(true);
+      else if (act === "spin") showSpin();
+      else if (act === "labplay") {
+        S.spinView = false;
+        S.t = S.serve.tStart + 0.3;
+        S.rate = 0.25;
+        S.playing = true;
+        S.stopAt = null;
+        if (S.view === "ball" || S.view === "contact") setView(S.home === "recv" ? "side" : S.home);
+        syncTransport();
+      }
+    });
+    const scrub = $("#scrub");
+    function syncTransport() {
+      const was = $("#transport").hidden;
+      $("#transport").hidden = !reviewing();
+      if (was !== $("#transport").hidden) inset();
+      $("#btnPlay").textContent = S.playing ? "\u6682\u505C" : "\u64AD\u653E";
+      $$("#rateSeg button").forEach((b) => b.classList.toggle("on", Math.abs(parseFloat(b.dataset.rate) - S.rate) < 1e-6));
+      $("#tgAids").classList.toggle("on", S.aids);
+      $("#tgTrail").classList.toggle("on", S.trail);
+    }
+    function tickTransport() {
+      const sv = S.serve;
+      if (!sv || $("#transport").hidden) return;
+      if (document.activeElement !== scrub || S.playing) scrub.value = String(Math.round((S.t - sv.tStart) / (sv.tEnd - sv.tStart) * 1e3));
+      $("#timeLbl").textContent = (S.t >= 0 ? "+" : "\u2212") + Math.abs(S.t).toFixed(3) + " s";
+    }
+    scrub.addEventListener("input", () => {
+      const sv = S.serve;
+      if (!sv) return;
+      S.playing = false;
+      S.stopAt = null;
+      S.t = sv.tStart + parseFloat(scrub.value) / 1e3 * (sv.tEnd - sv.tStart);
+      syncTransport();
+    });
+    $("#btnPlay").addEventListener("click", () => {
+      const sv = S.serve;
+      if (!sv) return;
+      S.stopAt = null;
+      if (!S.playing && S.t >= sv.tEnd - 1e-3) S.t = -0.3;
+      S.playing = !S.playing;
+      if (S.playing && S.view === "contact" && S.t >= -0.01) setView(S.mode === "lab" && S.home === "recv" ? "side" : S.home);
+      syncTransport();
+    });
+    $("#rateSeg").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      S.rate = parseFloat(b.dataset.rate);
+      syncTransport();
+    });
+    function jump(where) {
+      const sv = S.serve;
+      if (!sv) return;
+      if (where === "hit") return showContact(false);
+      if (where === "arrive") return showSpin();
+      const b1 = sv.verdict.b1;
+      showSpin(clamp(b1 ? b1.t * 0.5 : 0.06, 0.012, 0.07));
+    }
+    $("#stageChips").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (b && reviewing()) jump(b.dataset.stage);
+    });
+    $("#tgAids").addEventListener("click", () => {
+      S.aids = !S.aids;
+      syncTransport();
+    });
+    $("#tgTrail").addEventListener("click", () => {
+      S.trail = !S.trail;
+      syncTransport();
+    });
+    $("#spinRate").addEventListener("input", (e) => {
+      S.spinRate = parseFloat(e.target.value) / 100;
+    });
+    const touch = () => {
+      S.dirty = true;
+      save();
+    };
+    const custom = () => {
+      S.set.preset = "custom";
+    };
+    const segBind = (sel, attr, get, setv) => {
+      const root = $(sel);
+      root.addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        setv(b.dataset[attr]);
+        syncUI();
+      });
+      return () => $$("button", root).forEach((b) => b.classList.toggle("on", String(get()) === b.dataset[attr]));
+    };
+    const multiBind = (sel, attr, arrOrObj, keyOf) => {
+      const root = $(sel);
+      root.addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        const k = keyOf(b.dataset[attr]);
+        const o = arrOrObj();
+        o[k] = !o[k];
+        if (!Object.values(o).some(Boolean)) o[k] = true;
+        touch();
+        syncUI();
+      });
+      return () => $$("button", root).forEach((b) => b.classList.toggle("on", !!arrOrObj()[keyOf(b.dataset[attr])]));
+    };
+    const syncers = [
+      multiBind("#typeChips", "type", () => S.set.types, (v) => v),
+      multiBind("#posChips", "pos", () => S.set.pos, (v) => parseInt(v, 10)),
+      multiBind("#lenChips", "len", () => S.set.len, (v) => parseInt(v, 10)),
+      segBind("#handSeg", "hand", () => S.set.hand, (v) => {
+        S.set.hand = parseInt(v, 10);
+        touch();
+      }),
+      segBind("#fakeSeg", "fake", () => S.set.fake, (v) => {
+        S.set.fake = v;
+        custom();
+        touch();
+      }),
+      segBind("#choiceSeg", "ch", () => S.set.choices, (v) => {
+        S.set.choices = parseInt(v, 10);
+        custom();
+        touch();
+      }),
+      segBind("#speedSeg", "sp", () => S.set.speed, (v) => {
+        S.set.speed = parseFloat(v);
+        custom();
+        save();
+      }),
+      segBind("#watchSeg", "watch", () => S.set.watch, (v) => {
+        S.set.watch = v;
+        custom();
+        save();
+      }),
+      segBind("#isoSeg", "iso", () => S.iso, (v) => {
+        S.iso = v;
+      })
+    ];
+    $("#presetChips").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      const p = PRESETS[b.dataset.preset];
+      Object.assign(S.set, { preset: b.dataset.preset, fake: p.fake, choices: p.choices, speed: p.speed, watch: p.watch, style: p.style });
+      touch();
+      syncUI();
+    });
+    $("#styleSel").addEventListener("change", (e) => {
+      S.set.style = e.target.value;
+      custom();
+      touch();
+      syncUI();
+    });
+    $("#btnLeft").addEventListener("click", () => {
+      $("#left").classList.toggle("open");
+      $("#right").classList.remove("open");
+    });
+    $("#btnRight").addEventListener("click", () => {
+      $("#right").classList.toggle("open");
+      $("#left").classList.remove("open");
+    });
+    $("#views").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (b) {
+        S.spinView = false;
+        S.home = b.dataset.view;
+        setView(b.dataset.view);
+      }
+    });
+    function syncUI() {
+      syncers.forEach((f) => f());
+      $$("#presetChips button").forEach((b) => b.classList.toggle("on", b.dataset.preset === S.set.preset));
+      $("#presetNote").textContent = PRESETS[S.set.preset] ? PRESETS[S.set.preset].note : "\u81EA\u5B9A\u4E49\uFF1A\u4E0B\u9762\u6BCF\u4E00\u9879\u90FD\u6309\u4F60\u9009\u7684\u6765\u3002";
+      $("#styleSel").value = S.set.style;
+      $$(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.mode === S.mode));
+      $("#panelPractice").hidden = S.mode !== "practice";
+      $("#panelLab").hidden = S.mode !== "lab";
+      $("#readBody").hidden = !reviewing();
+      $("#readLock").hidden = reviewing();
+      $("#right").classList.toggle("locked", !reviewing());
+      $("#pending").hidden = !(S.mode === "practice" && S.dirty && S.phase !== "review");
+      syncTransport();
+    }
+    const LAB_SL = [
+      ["openDeg", "\u62CD\u9762\u540E\u4EF0\u89D2\uFF080 \u7ACB\u7740\uFF0C90 \u653E\u5E73\uFF09", -40, 110, 1, "\xB0"],
+      ["yawDeg", "\u62CD\u9762\u5DE6\u53F3\u504F\uFF08\u6B63 = \u671D\u4F60\u7684\u53F3\u8FB9\uFF09", -180, 180, 1, "\xB0"],
+      // 拍面接近放平时，这个角可以是任意值
+      ["vf", "\u62CD\u901F \xB7 \u5411\u524D\uFF08\u671D\u4F60\uFF09", -3, 12, 0.1, " m/s"],
+      ["vu", "\u62CD\u901F \xB7 \u5411\u4E0A", -8, 8, 0.1, " m/s"],
+      ["vs", "\u62CD\u901F \xB7 \u671D\u4F60\u7684\u53F3\u8FB9", -10, 10, 0.1, " m/s"],
+      ["vfall", "\u89E6\u7403\u65F6\u7403\u7684\u4E0B\u843D\u901F\u5EA6", 0, 6, 0.1, " m/s"],
+      ["hc", "\u89E6\u7403\u9AD8\u5EA6\uFF08\u79BB\u53F0\u9762\uFF09", 5, 35, 1, " cm"],
+      ["xc", "\u53D1\u7403\u4F4D\u7F6E\uFF08\u5DE6\u53F3\uFF09", -60, 60, 1, " cm"],
+      ["mu", "\u80F6\u76AE\u6469\u64E6\u7CFB\u6570", 0.2, 2, 0.05, ""],
+      ["et", "\u80F6\u76AE\u5207\u5411\u5F39\u6027\uFF080 \u4E0D\u56DE\u5F39\uFF09", 0, 0.95, 0.01, ""]
+    ];
+    const labGet = (k) => {
+      const L = S.lab;
+      return k === "vf" ? L.vr[2] : k === "vu" ? L.vr[1] : k === "vs" ? L.vr[0] : k === "hc" ? L.hc * 100 : k === "xc" ? L.xc * 100 : L[k];
+    };
+    const labSet = (k, v) => {
+      const L = S.lab;
+      if (k === "vf") L.vr[2] = v;
+      else if (k === "vu") L.vr[1] = v;
+      else if (k === "vs") L.vr[0] = v;
+      else if (k === "hc") L.hc = v / 100;
+      else if (k === "xc") L.xc = v / 100;
+      else L[k] = v;
+    };
+    $("#labSliders").innerHTML = LAB_SL.map(([k, name, mn, mx, stp]) => `<div class="sl"><label for="lab_${k}">${name}</label><output id="out_${k}"></output><input type="range" id="lab_${k}" min="${mn}" max="${mx}" step="${stp}"></div>`).join("");
+    function syncLabSliders() {
+      for (const [k, , mn, mx, stp, unit] of LAB_SL) {
+        const v = clamp(labGet(k), mn, mx);
+        labSet(k, v);
+        $("#lab_" + k).value = v;
+        $("#out_" + k).textContent = (stp >= 1 ? v.toFixed(0) : stp >= 0.1 ? v.toFixed(1) : v.toFixed(2)) + unit;
+      }
+      $("#labType").value = S.lab.type;
+    }
+    function rebuildLab() {
+      const L = S.lab;
+      const sv = manualServe({ ...L, vr: L.vr.slice(), rubber: { ...P.rubber, mu: L.mu, et0: L.et } });
+      adopt(sv);
+      S.phase = "lab";
+      S.playing = false;
+      S.stopAt = null;
+      S.t = 0;
+      S.spinView = false;
+      const el = $("#labStatus");
+      el.className = sv.legal ? "ok" : "bad";
+      el.textContent = sv.legal ? `\u5408\u6CD5\u53D1\u7403\uFF1A\u843D\u5728\u4F60\u8FD9\u8FB9\u79BB\u7F51 ${sv.verdict.b2.p[2].toFixed(2)} m\uFF0C\u8FC7\u7F51\u4F59\u91CF ${(sv.verdict.net.clear * 100).toFixed(1)} cm\uFF0C\u5230\u4F60\u9762\u524D\u662F${CLS[sv.cls]}` : `\u4E0D\u5408\u6CD5\uFF1A${sv.verdict.why}`;
+      renderStage();
+      syncTransport();
+    }
+    $("#labSliders").addEventListener("input", (e) => {
+      const k = e.target.id.replace("lab_", "");
+      labSet(k, parseFloat(e.target.value));
+      syncLabSliders();
+      rebuildLab();
+    });
+    $("#labType").addEventListener("change", (e) => {
+      S.lab.type = e.target.value;
+      rebuildLab();
+    });
+    $$(".labEx").forEach((b) => b.addEventListener("click", () => {
+      let sv = null;
+      for (let k = 0; k < 8 && !sv; k++) sv = generateServe({ type: S.lab.type, hand: 1, intent: b.dataset.ex, pos: 1, len: pick(["short", "long"]), style: "standard", fake: false });
+      if (!sv) return;
+      Object.assign(S.lab, toLab(sv), { mu: P.rubber.mu, et: P.rubber.et0 });
+      syncLabSliders();
+      rebuildLab();
+      setView("side");
+    }));
+    let labSeeded = false;
+    function seedLab() {
+      if (labSeeded) return;
+      labSeeded = true;
+      for (let k = 0; k < 8; k++) {
+        const sv = generateServe({ type: S.lab.type, hand: 1, intent: "back", pos: 1, len: "long", style: "standard", fake: false });
+        if (sv) {
+          Object.assign(S.lab, toLab(sv));
+          break;
+        }
+      }
+    }
+    function setMode(m) {
+      S.mode = m;
+      S.spinView = false;
+      if (m === "lab") {
+        seedLab();
+        syncLabSliders();
+        rebuildLab();
+        setView("side");
+      } else {
+        nextServe();
+        setView("recv");
+      }
+      try {
+        if (location.hash !== "#" + m) history.replaceState(null, "", "#" + m);
+      } catch (e) {
+      }
+      syncUI();
+      renderStage();
+    }
+    $(".tabs").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (b && b.dataset.mode !== S.mode) setMode(b.dataset.mode);
+    });
+    window.addEventListener("hashchange", () => {
+      const m = location.hash === "#lab" ? "lab" : "practice";
+      if (m !== S.mode) setMode(m);
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (S.mode === "lab") $("#btnPlay").click();
+        else if (S.phase === "ready") playServe();
+        else if (S.phase === "review") {
+          S.dirty = true;
+          playServe();
+        }
+      } else if (S.mode === "practice" && (S.phase === "play" || S.phase === "ask")) {
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          answer("top");
+        } else if (e.key === "ArrowDown") {
+          e.preventDefault();
+          answer("back");
+        } else if (e.key === "ArrowRight" && $('#stage [data-ans="flat"]')) {
+          e.preventDefault();
+          answer("flat");
+        }
+      } else if (reviewing() && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        e.preventDefault();
+        S.playing = false;
+        S.stopAt = null;
+        S.t = clamp(S.t + (e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 0.02 : 2e-3), S.serve.tStart, S.serve.tEnd);
+        syncTransport();
+      }
+    });
+    let last = performance.now();
+    function frame(now) {
+      const dt = Math.min(0.05, (now - last) / 1e3);
+      last = now;
+      const sv = S.serve;
+      if (sv) {
+        if (S.playing) {
+          S.t += dt * S.rate;
+          if (S.stopAt !== null && S.t >= S.stopAt) {
+            S.t = S.stopAt;
+            S.playing = false;
+            S.stopAt = null;
+            syncTransport();
+          } else if (S.t >= sv.tEnd) {
+            S.t = sv.tEnd;
+            S.playing = false;
+            onPlayEnd();
+          }
+        }
+        if (S.mode === "practice" && (S.phase === "play" || S.phase === "ask")) {
+          const live = S.t >= 0 || S.phase === "ask";
+          if (live !== S.live) {
+            S.live = live;
+            $$("#stage .ans").forEach((b) => {
+              b.disabled = !live;
+            });
+          }
+        }
+        prevBall.copy(ballPos);
+        apply(dt);
+        if (S.view === "ball" && !camAnim) {
+          _v.copy(ballPos).sub(prevBall);
+          camera.position.add(_v);
+          controls.target.add(_v);
+        }
+        tickTransport();
+      }
+      if (camAnim) {
+        camAnim.u += dt / camAnim.dur;
+        const e = smooth2(Math.min(1, camAnim.u));
+        camera.position.lerpVectors(camAnim.p0, camAnim.p1, e);
+        controls.target.lerpVectors(camAnim.t0, camAnim.t1, e);
+        if (camAnim.u >= 1) camAnim = null;
+      }
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(frame);
+    }
+    resize();
+    const m0 = location.hash === "#lab" ? "lab" : "practice";
+    S.mode = m0;
+    if (m0 === "lab") {
+      seedLab();
+      syncLabSliders();
+      rebuildLab();
+      setView("side", true);
+    } else {
+      nextServe();
+      setView("recv", true);
+    }
+    syncUI();
+    renderStage();
+    window.__pp = {
+      S,
+      setView,
+      nextServe,
+      playServe,
+      answer,
+      jump,
+      setMode,
+      showContact,
+      showSpin,
+      camera,
+      controls,
+      cam: (p, t) => {
+        camAnim = null;
+        camera.position.set(p[0], p[1], p[2]);
+        controls.target.set(t[0], t[1], t[2]);
+      },
+      force: (cfg) => {
+        const sv = generateServe(cfg);
+        if (!sv) return null;
+        sv.cfg = cfg;
+        adopt(sv);
+        S.dirty = false;
+        S.phase = "ready";
+        S.answer = null;
+        S.t = sv.tStart;
+        S.playing = false;
+        S.spinView = false;
+        syncUI();
+        renderStage();
+        return sv.cls;
+      }
+    };
+    requestAnimationFrame(frame);
+  }
+  if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start);
+  else start(window.claude && window.claude.hot && window.claude.hot.data || {});
+})();
+
+</script>
+</body>
+</html>

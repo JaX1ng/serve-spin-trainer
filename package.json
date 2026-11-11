@@ -1,0 +1,15 @@
+{
+  "name": "serve-spin-trainer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "侧上还是侧下：用真实物理引擎练习判断乒乓球发球旋转",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "test": "node test/physics.test.mjs && node test/serve.test.mjs && node test/soak.mjs 600"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "three": "0.128.0"
+  }
+}

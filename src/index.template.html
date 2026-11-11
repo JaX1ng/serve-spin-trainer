@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>侧上还是侧下</title>
+<meta name="description" content="看拍型判断乒乓球发球是侧上还是侧下：旋转由物理引擎算出来，不是预设动画。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Saira+Condensed:wght@500;600;700&family=ZCOOL+QingKe+HuangYou&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* 夜场球馆：深蓝黑的场地、红地胶、蓝球台；界面是裁判台上的记分牌——翻牌数字、窄体数码、粗黑体口令 */
+  --ink:#0b111b; --slab:rgba(15,23,36,.9); --slab2:#18253b; --line:rgba(233,238,246,.14);
+  --text:#e9eef6; --mute:#95a3b8; --ball:#ff9a2e;
+  --x:#ff6257; --y:#35d08b; --z:#4ea9ff;      /* 三根轴：横=上下旋，竖=侧旋，前后=螺旋 */
+  --ok:#9be7b4; --no:#ffa0ad;
+  --f-disp:"ZCOOL QingKe HuangYou","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  --f-num:"Saira Condensed","DIN Alternate","Roboto Condensed","Arial Narrow",sans-serif;
+  --f-body:"Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --r:10px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--ink);color:var(--text);font:14px/1.5 var(--f-body);overflow:hidden;-webkit-font-smoothing:antialiased}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--ball);outline-offset:2px}
+#app{position:relative;height:100%;width:100%;overflow:hidden}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.lbl{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;font:600 13px/1 var(--f-num);letter-spacing:.02em;padding:3px 7px 4px;border-radius:5px;background:rgba(8,13,22,.78);border:1px solid currentColor}
+.lbl b{font-weight:700;font-size:15px}
+.lbl.sm{font-size:12px;border-color:transparent;background:rgba(8,13,22,.6)}
+
+/* 顶栏 */
+#top{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:14px;padding:10px 14px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(8,13,22,.85),rgba(8,13,22,0))}
+#top>*{pointer-events:auto}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand h1{font:400 26px/1 var(--f-disp);margin:0;letter-spacing:.04em;white-space:nowrap}
+.brand h1 i{font-style:normal;color:var(--ball)}
+.brand span{color:var(--mute);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabs{display:flex;background:var(--slab);border:1px solid var(--line);border-radius:999px;padding:3px}
+.tabs button{border:0;background:none;padding:5px 16px;border-radius:999px;color:var(--mute);font-weight:500;white-space:nowrap}
+.tabs button.on{background:var(--text);color:#0b111b}
+.grow{flex:1}
+.drawerBtn{display:none;border:1px solid var(--line);background:var(--slab);border-radius:8px;padding:6px 10px;white-space:nowrap}
+
+/* 侧板 */
+.panel{position:absolute;top:66px;bottom:150px;width:272px;background:var(--slab);border:1px solid var(--line);border-radius:var(--r);
+  overflow:auto;padding:12px 12px 14px;backdrop-filter:blur(6px);scrollbar-width:thin}
+#left{left:12px}
+#right{right:12px;width:286px}
+#right.locked{bottom:auto}
+.panel h2{font:400 17px/1.2 var(--f-disp);letter-spacing:.06em;margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline}
+.panel h2 small{font:400 11px var(--f-body);color:var(--mute);letter-spacing:0}
+.grp{display:flex;flex-direction:column;gap:6px;padding:9px 0;border-top:1px solid var(--line)}
+.grp:first-of-type{border-top:0;padding-top:2px}
+.grp>label,.grp>.cap{font-size:12px;color:var(--mute);display:flex;justify-content:space-between;gap:8px}
+.seg,.chips{display:flex;flex-wrap:wrap;gap:5px}
+.seg button,.chips button{flex:1 1 auto;border:1px solid var(--line);background:transparent;border-radius:7px;padding:5px 8px;font-size:13px;color:var(--text);white-space:nowrap}
+.seg button.on,.chips button.on{background:var(--slab2);border-color:var(--ball);color:#fff}
+.chips button.on{box-shadow:inset 0 -2px 0 var(--ball)}
+select{width:100%;background:var(--slab2);border:1px solid var(--line);border-radius:7px;padding:6px 8px}
+.link{background:none;border:0;color:var(--mute);text-decoration:underline;padding:0;font-size:12px;align-self:flex-start}
+.note{font-size:12px;color:var(--mute);margin:0}
+.note b{color:var(--text);font-weight:500}
+
+/* 滑杆（实验台） */
+.sl{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center}
+.sl label{font-size:12px;color:var(--mute)}
+.sl output{font:600 14px var(--f-num);font-variant-numeric:tabular-nums}
+.sl input{grid-column:1/3;width:100%;accent-color:var(--ball)}
+#labStatus{font-weight:500;padding:7px 9px;border-radius:7px;background:var(--slab2);border-left:3px solid var(--mute);font-size:13px}
+#labStatus.ok{border-color:var(--ok)}#labStatus.bad{border-color:var(--no)}
+
+/* 旋转读数 */
+.bar{display:grid;grid-template-columns:1fr auto;gap:3px 8px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line)}
+.bar .nm{font-size:12px;color:var(--mute)}
+.bar .nm b{font:700 14px var(--f-num);margin-right:6px}
+.bar .val{font:700 20px/1 var(--f-num);font-variant-numeric:tabular-nums;text-align:right}
+.bar .val small{font:500 11px var(--f-body);color:var(--mute);margin-left:3px}
+.bar .desc{grid-column:1/3;font-size:12px}
+.track{grid-column:1/3;height:8px;border-radius:4px;background:var(--slab2);position:relative;overflow:hidden}
+.track::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--mute)}
+.track i{position:absolute;top:0;bottom:0;left:50%;width:0;border-radius:4px}
+.bx .nm b,.bx .val{color:var(--x)}.bx .track i{background:var(--x)}
+.by .nm b,.by .val{color:var(--y)}.by .track i{background:var(--y)}
+.bz .nm b,.bz .val{color:var(--z)}.bz .track i{background:var(--z)}
+.tot{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0 4px;border-top:1px solid var(--line)}
+.tot b{font:700 24px/1 var(--f-num)}
+dl.kv{display:grid;grid-template-columns:1fr auto;gap:3px 10px;margin:0;font-size:12.5px}
+dl.kv dt{color:var(--mute)}dl.kv dd{margin:0;text-align:right;font:600 14px var(--f-num);font-variant-numeric:tabular-nums}
+dl.kv dd.t{font:500 12.5px var(--f-body)}
+.chain{font-size:12.5px;margin:6px 0 0;padding:8px 9px;background:var(--slab2);border-radius:7px}
+.chain b{font-weight:700}
+.up{color:var(--ok)}.dn{color:var(--no)}
+
+/* 视角 */
+#views{position:absolute;top:66px;left:50%;transform:translateX(-50%);display:flex;gap:5px;background:var(--slab);border:1px solid var(--line);border-radius:999px;padding:3px}
+#views button{border:0;background:none;border-radius:999px;padding:4px 11px;font-size:12.5px;color:var(--mute);white-space:nowrap}
+#views button.on{background:var(--slab2);color:#fff}
+
+/* 底部：出题 + 进度条 */
+#dock{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);width:min(760px,calc(100% - 24px));display:flex;flex-direction:column;gap:8px;pointer-events:none}
+#dock>*{pointer-events:auto}
+#stage{background:var(--slab);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;display:flex;flex-direction:column;gap:8px;backdrop-filter:blur(6px)}
+#stage:empty{display:none}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.hint{margin:0;color:var(--mute);font-size:12.5px;text-wrap:balance}
+.btn{border:1px solid var(--line);background:var(--slab2);border-radius:8px;padding:8px 14px;font-weight:500;white-space:nowrap}
+.btn.primary{background:var(--ball);border-color:var(--ball);color:#1a1206;font:400 20px/1 var(--f-disp);letter-spacing:.08em;padding:11px 26px}
+.btn kbd{font:500 11px var(--f-body);opacity:.65;margin-left:6px;border:1px solid currentColor;border-radius:4px;padding:0 4px}
+.answers{display:flex;gap:8px;flex:1}
+.ans{flex:1;border:1px solid var(--line);border-radius:9px;background:var(--slab2);padding:9px 8px 8px;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
+.ans b{font:400 28px/1 var(--f-disp);letter-spacing:.1em}
+.ans small{color:var(--mute);font-size:11.5px}
+.ans.up b{color:var(--text)}.ans:hover{border-color:var(--ball)}
+.ans[disabled]{opacity:.45;cursor:default}
+.verdict{display:flex;align-items:baseline;gap:4px 12px;flex-wrap:wrap;flex:1 1 300px;min-width:0}
+.verdict b{font:400 28px/1 var(--f-disp);letter-spacing:.06em}
+.verdict.ok b{color:var(--ok)}.verdict.no b{color:var(--no)}
+.verdict span{color:var(--text);font-size:13px}
+.verdict span i{font-style:normal;color:var(--mute);font-size:12px;margin-left:10px;white-space:nowrap}
+.why{margin:0;font-size:13px;line-height:1.6}
+.why em{font-style:normal;font-weight:700;font-family:var(--f-num);font-size:15px}
+#transport{background:var(--slab);border:1px solid var(--line);border-radius:var(--r);padding:7px 10px;display:flex;flex-direction:column;gap:6px;backdrop-filter:blur(6px)}
+#transport[hidden]{display:none}
+#transport .row{gap:6px}
+#scrub{flex:1;min-width:120px;accent-color:var(--ball)}
+#timeLbl{font:600 14px var(--f-num);font-variant-numeric:tabular-nums;min-width:74px;text-align:right}
+.mini{border:1px solid var(--line);background:transparent;border-radius:6px;padding:3px 8px;font-size:12px;color:var(--text);white-space:nowrap}
+.mini.on{background:var(--slab2);border-color:var(--ball)}
+.mini.play{min-width:58px;background:var(--slab2);font-weight:700}
+.sep{width:1px;align-self:stretch;background:var(--line);margin:0 2px}
+.tiny{font-size:11.5px;color:var(--mute)}
+#spinRate{width:100%;accent-color:var(--ball)}
+
+.cx{color:var(--x)}.cy{color:var(--y)}.cz{color:var(--z)}.cb{color:#ffe14d}
+ol.steps li b.in{display:inline;font-size:inherit;color:var(--text);letter-spacing:0}
+
+/* 讲解 */
+ol.steps{list-style:none;counter-reset:st;margin:0 0 4px;padding:0;display:flex;flex-direction:column;gap:7px}
+ol.steps li{counter-increment:st;position:relative;padding:7px 9px 8px 34px;background:var(--slab2);border-radius:8px;font-size:13px;line-height:1.55}
+ol.steps li::before{content:counter(st);position:absolute;left:9px;top:7px;width:18px;height:18px;border-radius:50%;background:var(--ball);color:#1a1206;font:700 12px/18px var(--f-num);text-align:center}
+ol.steps li b{display:block;font-weight:700;font-size:12px;color:var(--mute);letter-spacing:.04em}
+ol.steps em{font-style:normal;font-weight:700}
+#pending{color:var(--ball);margin:0 0 6px}
+.note.rule{margin:2px 0 8px;padding:8px 10px;border-left:3px solid var(--ball);background:rgba(255,154,46,.09);border-radius:0 7px 7px 0;color:var(--text);font-size:12.5px;line-height:1.6}
+#err{position:absolute;inset:0;display:none;place-items:center;padding:24px;text-align:center;background:var(--ink)}
+
+@media (max-width:1020px){
+  .brand span{display:none}
+  .panel{display:none;top:58px;bottom:auto;max-height:calc(100% - 230px);z-index:5}
+  .panel.open{display:block}
+  .drawerBtn{display:block}
+  #views{left:12px;transform:none;top:58px;max-width:calc(100% - 24px);overflow-x:auto}
+}
+@media (max-width:560px){
+  #top{gap:8px;padding:8px 10px}
+  .brand h1{font-size:17px;letter-spacing:.01em}
+  .tabs button{padding:4px 12px}
+  .drawerBtn{padding:5px 11px}
+  #right,#left{left:10px;right:10px;width:auto}
+  .panel{max-height:calc(100% - 290px)}
+  .ans b{font-size:23px}
+  .verdict b{font-size:23px}
+  .btn{padding:7px 11px}.btn.primary{font-size:18px;padding:9px 18px}
+  .btn kbd,.ans small{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="gl" aria-label="乒乓球台三维场景"></canvas>
+  <div id="labels"></div>
+
+  <header id="top">
+    <div class="brand"><h1>侧上<i>还是</i>侧下</h1><span>看拍型判断发球旋转</span></div>
+    <nav class="tabs" aria-label="模式">
+      <button type="button" data-mode="practice" class="on">练习</button>
+      <button type="button" data-mode="lab">实验台</button>
+    </nav>
+    <div class="grow"></div>
+    <button type="button" class="drawerBtn" id="btnLeft">设置</button>
+    <button type="button" class="drawerBtn" id="btnRight">讲解</button>
+  </header>
+
+  <div id="views" role="group" aria-label="视角">
+    <button type="button" data-view="recv" class="on">接球视角</button>
+    <button type="button" data-view="close">走近看</button>
+    <button type="button" data-view="side">侧面</button>
+    <button type="button" data-view="top">俯视</button>
+  </div>
+
+  <aside class="panel" id="left" aria-label="设置">
+    <div id="panelPractice">
+      <h2>练习设置 <small>拖动画面转视角，滚轮缩放</small></h2>
+      <p class="note" id="pending" hidden>改好了，下一个球开始按新设置发。</p>
+      <div class="grp"><div class="cap">练习方案</div>
+        <div class="chips" id="presetChips">
+          <button type="button" data-preset="basic">入门</button><button type="button" data-preset="mid">进阶</button><button type="button" data-preset="match">实战</button>
+        </div>
+        <p class="note" id="presetNote"></p>
+      </div>
+      <div class="grp"><div class="cap">对方发什么球 <span>可多选</span></div>
+        <div class="chips" id="typeChips">
+          <button type="button" data-type="pendulum">顺旋转(钟摆)</button><button type="button" data-type="reverse">逆旋转</button>
+          <button type="button" data-type="hook">勾手</button><button type="button" data-type="backhand">反手</button>
+        </div>
+      </div>
+      <div class="grp"><div class="cap">对方持拍手</div>
+        <div class="seg" id="handSeg"><button type="button" data-hand="1">右手</button><button type="button" data-hand="-1">左手</button></div>
+      </div>
+      <div class="grp"><div class="cap">对方站在画面的 <span>选几个就在几个里随机</span></div>
+        <div class="chips" id="posChips"><button type="button" data-pos="0">左边</button><button type="button" data-pos="1">中间</button><button type="button" data-pos="2">右边</button></div>
+        <div class="cap" style="margin-top:4px">球发得</div>
+        <div class="chips" id="lenChips"><button type="button" data-len="0">近（短球）</button><button type="button" data-len="1">远（长球）</button></div>
+      </div>
+      <div class="grp"><label for="styleSel">对方的拍型习惯</label>
+        <select id="styleSel">
+          <option value="random">每球随机换一种</option><option value="standard">标准中抛</option><option value="wrist">手腕小动作</option>
+          <option value="arm">大臂大动作</option><option value="high">高抛（拍面看着更仰）</option><option value="low">低抛快节奏（拍面看着更立）</option>
+        </select>
+      </div>
+      <div class="grp"><div class="cap">假动作 <span>触球后反着收拍</span></div>
+        <div class="seg" id="fakeSeg"><button type="button" data-fake="none">没有</button><button type="button" data-fake="some">有时</button><button type="button" data-fake="all">每球都有</button></div>
+      </div>
+      <div class="grp"><div class="cap">判断选项</div>
+        <div class="seg" id="choiceSeg"><button type="button" data-ch="2">侧上 / 侧下</button><button type="button" data-ch="3">再加"不转"</button></div>
+      </div>
+      <div class="grp"><div class="cap">播放速度</div>
+        <div class="seg" id="speedSeg"><button type="button" data-sp="1">原速</button><button type="button" data-sp="0.5">0.5×</button><button type="button" data-sp="0.25">0.25×</button></div>
+      </div>
+      <div class="grp"><div class="cap">只给你看</div>
+        <div class="seg" id="watchSeg"><button type="button" data-watch="both">拍和球</button><button type="button" data-watch="racket">只看拍（球一离拍就消失）</button></div>
+      </div>
+    </div>
+
+    <div id="panelLab" hidden>
+      <h2>物理实验台 <small>自己摆拍面、定拍速</small></h2>
+      <p class="note">这里没有预设的旋转。你给出<b>拍面</b>和<b>球拍速度</b>，碰撞和飞行全由引擎算；发不过网、出界也照实显示。</p>
+      <div id="labStatus" style="margin-top:8px">—</div>
+      <div class="grp"><div class="cap">载入一个算好的发球，再自己改</div>
+        <div class="seg"><button type="button" class="labEx" data-ex="top">侧上</button><button type="button" class="labEx" data-ex="back">侧下</button><button type="button" class="labEx" data-ex="flat">不转</button></div>
+        <select id="labType" aria-label="动作类型"><option value="pendulum">顺旋转(钟摆)</option><option value="reverse">逆旋转</option><option value="hook">勾手</option><option value="backhand">反手</option></select>
+      </div>
+      <div class="grp" id="labSliders"></div>
+    </div>
+  </aside>
+
+  <aside class="panel" id="right" aria-label="这一球的讲解">
+    <h2>触球那一下 <small id="stageName">—</small></h2>
+    <p class="note" id="readLock">先自己判断。答完这一球，这里会讲触球瞬间拍子对球做了什么。</p>
+    <div id="readBody" hidden>
+      <ol class="steps" id="explain"></ol>
+      <p class="note rule"><b>一句话记住：</b>只看触球那一下，拍子顺着拍面是往上蹭还是往下蹭。往上是侧上，往下是侧下；拍面后仰得越多，"往下蹭"看上去越像往前送。</p>
+      <div class="grp"><div class="cap">三个方向各转多快 <span>点下面看不同时刻</span></div>
+        <div class="chips" id="stageChips">
+          <button type="button" data-stage="hit">触球瞬间</button><button type="button" data-stage="launch">刚离拍</button><button type="button" data-stage="arrive">到你面前</button>
+        </div>
+      </div>
+      <div class="bar bx"><div class="nm"><b>X 横轴</b>上旋 / 下旋</div><div class="val" id="valX">—</div><div class="track"><i id="barX"></i></div><div class="desc" id="descX"></div></div>
+      <div class="bar by"><div class="nm"><b>Y 竖轴</b>侧旋</div><div class="val" id="valY">—</div><div class="track"><i id="barY"></i></div><div class="desc" id="descY"></div></div>
+      <div class="bar bz"><div class="nm"><b>Z 前后轴</b>螺旋</div><div class="val" id="valZ">—</div><div class="track"><i id="barZ"></i></div><div class="desc" id="descZ"></div></div>
+      <div class="tot"><span>合起来</span><span><b id="valT">—</b> <small class="tiny">转/秒</small></span></div>
+      <div class="grp"><div class="cap">"看球怎么转"时只转哪个方向</div>
+        <div class="seg" id="isoSeg"><button type="button" data-iso="all">合成</button><button type="button" data-iso="x">只 X</button><button type="button" data-iso="y">只 Y</button><button type="button" data-iso="z">只 Z</button></div>
+        <label class="cap" for="spinRate">转多快 <span>真实转速太快看不清，这里是放慢的</span></label>
+        <input type="range" id="spinRate" min="0" max="100" value="45">
+      </div>
+      <p class="note">判对错按<b>到你面前</b>的上下旋：到你面前不到 5 转/秒算"不转"。</p>
+    </div>
+  </aside>
+
+  <section id="dock">
+    <div id="stage"></div>
+    <div id="transport" hidden>
+      <div class="row">
+        <button type="button" class="mini play" id="btnPlay">播放</button>
+        <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="时间轴">
+        <span id="timeLbl">0.000 s</span>
+        <span class="sep"></span>
+        <span id="rateSeg" class="row" style="gap:4px" role="group" aria-label="播放速度">
+          <button type="button" class="mini" data-rate="1">1×</button><button type="button" class="mini" data-rate="0.25">¼</button><button type="button" class="mini" data-rate="0.1">1/10</button><button type="button" class="mini" data-rate="0.025">1/40</button>
+        </span>
+        <span class="sep"></span>
+        <button type="button" class="mini" id="tgAids">箭头</button>
+        <button type="button" class="mini" id="tgTrail">轨迹</button>
+      </div>
+    </div>
+  </section>
+  <div id="err"><p>3D 组件没加载出来。检查一下网络，刷新再试。</p></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+/*__BUNDLE__*/
+</script>
+</body>
+</html>
