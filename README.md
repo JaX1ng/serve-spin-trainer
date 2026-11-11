@@ -4,8 +4,7 @@
 
 **直接打开：<https://jax1ng.github.io/serve-spin-trainer/>**
 
-> 这个地址要先在仓库里开一次 GitHub Pages 才生效：Settings → Pages → Source 选 **Deploy from a branch** → Branch 选 `main`、文件夹选 `/docs` → Save，等一两分钟。
-> 没开之前可以用这个不需要任何设置的地址：<https://raw.githack.com/JaX1ng/serve-spin-trainer/main/docs/index.html>
+> 改了代码推到 `main` 后，这个地址一两分钟内会自动更新（GitHub Pages，读的是 `docs/` 文件夹）。
 > 也可以把仓库下载下来，直接双击 `docs/index.html`（three.js 放在 `docs/vendor/` 里，不联网也能跑，只有字体会退回系统字体）。
 
 球的旋转不是预设动画。每一个发球都是先定触球瞬间的拍面和拍速，再交给一套碰撞 + 飞行 + 台面反弹的物理引擎去算，落点、过网、到你面前还剩多少上下旋，全部是算出来的结果。发球的人也不是预设动画：他是一副有关节活动范围的骨架，每个球都现算出"怎么站、怎么弯腰、手臂各关节转到多少度，才能在触球那一瞬间正好做到物理要的拍面和拍速"。
